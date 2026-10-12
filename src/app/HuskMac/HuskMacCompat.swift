@@ -256,8 +256,8 @@ final class AndroidHost: ObservableObject {
         TranslationLayerStore.shared.add(urls)
     }
     static func forgetIcons() {}
-    func list(_ where_: String) throws -> [GuestEntry] { [] }
-    func freeSpace(at: String) -> (free: Int64, total: Int64)? {
+    nonisolated func list(_ where_: String) throws -> [GuestEntry] { [] }
+    nonisolated func freeSpace(at: String) -> (free: Int64, total: Int64)? {
         (free: 100 * 1024 * 1024 * 1024, total: 256 * 1024 * 1024 * 1024)
     }
     static func quote(_ s: String) -> String { "\"\(s)\"" }
