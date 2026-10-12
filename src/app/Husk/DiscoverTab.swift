@@ -30,7 +30,9 @@ struct DiscoverView: View {
         }
         .background(Theme.backdrop)
         .navigationTitle("Discover")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
+        #endif
         .searchable(text: $searchText, prompt: "Search \(totalAppCount) apps")
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -83,7 +85,11 @@ struct DiscoverView: View {
                 } header: { Text("Could Not Load") }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
     }
 
     private var totalAppCount: Int {
@@ -205,7 +211,9 @@ struct DiscoverView: View {
                 }
             }
             .navigationTitle("Add Source")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { newSourceURL = ""; showingAddSource = false }
@@ -245,7 +253,9 @@ struct DiscoverView: View {
                 } header: { Text("Active Repositories") }
             }
             .navigationTitle("Repositories")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { showingSources = false }

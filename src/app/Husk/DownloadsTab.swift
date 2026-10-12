@@ -157,7 +157,9 @@ private struct AddDownloadSheet: View {
                 .foregroundStyle(.secondary)
             }
             .navigationTitle("Add Download")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

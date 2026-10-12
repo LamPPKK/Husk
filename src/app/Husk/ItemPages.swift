@@ -138,9 +138,13 @@ struct GamePage: View {
             aboutSection
             removeSection
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
-        .navigationTitle(app.label)
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .listStyle(.inset)
+        #endif
+        .navigationTitle(app.label)
         .fullScreenCover(isPresented: $playing, onDismiss: askHowItRan) { TLAttemptView(app: app) }
         .sheet(item: $reporting) { CompatReportSheet(subject: $0) }
         .sheet(item: Binding(get: { backupFile.map(IdentifiedURL.init) }, set: { backupFile = $0?.url })) { f in
@@ -449,9 +453,13 @@ struct AndroidAppPage: View {
                 if !canOpen { Text("Start Android to uninstall or look inside the app.") }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
-        .navigationTitle(live.label)
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .listStyle(.inset)
+        #endif
+        .navigationTitle(live.label)
         .confirmationDialog("Uninstall \(live.label)?", isPresented: $confirmUninstall, titleVisibility: .visible) {
             Button("Uninstall", role: .destructive) {
                 host.uninstall(app.name)
@@ -553,9 +561,13 @@ struct AndroidSystemPage: View {
                     .foregroundStyle(.secondary)
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
-        .navigationTitle("Android")
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .listStyle(.inset)
+        #endif
+        .navigationTitle("Android")
         .animation(.easeInOut(duration: 0.2), value: status)
     }
 

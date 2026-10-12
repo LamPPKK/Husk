@@ -284,7 +284,9 @@ struct TLAppSettingsView: View {
         }
         .huskForm()
         .navigationTitle("Settings")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onChange(of: settings) { $0.save(app.id) }
         .onChange(of: settings.geode) { on in
             if on { Task { await geode.prepare(app) } } else { geode.remove(app) }

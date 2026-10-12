@@ -59,7 +59,11 @@ struct DirectoryView: View {
                 }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
         .overlay {
             if loading && entries.isEmpty {
                 ProgressView()
@@ -72,7 +76,9 @@ struct DirectoryView: View {
             }
         }
         .navigationTitle(title)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(path == FilesTab.root ? .large : .inline)
+        #endif
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { load() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -239,7 +245,9 @@ struct ImportSheet: View {
             .padding(16)
             .background(Theme.backdrop)
             .navigationTitle("Import")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }

@@ -306,7 +306,9 @@ struct CompatReportSheet: View {
                 }
             }
             .navigationTitle(sent ? "Thanks!" : "Report")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(subject.afterPlaying ? "Not Now" : "Cancel") {

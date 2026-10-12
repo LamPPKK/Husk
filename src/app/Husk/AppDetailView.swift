@@ -145,9 +145,13 @@ struct AppDetailView: View {
                 .disabled(!canOpen)
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
-        .navigationTitle(live.label)
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .listStyle(.inset)
+        #endif
+        .navigationTitle(live.label)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { menu } }
         .confirmationDialog("Uninstall \(live.label)?", isPresented: $confirmUninstall,
                             titleVisibility: .visible) {

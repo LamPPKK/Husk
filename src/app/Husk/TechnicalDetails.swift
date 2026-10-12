@@ -114,9 +114,13 @@ struct TLTechnicalView: View {
                 Text("The end of the log from the last time the game started. Share it when reporting a problem.")
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
-        .navigationTitle("Technical Details")
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .listStyle(.inset)
+        #endif
+        .navigationTitle("Technical Details")
         .task {
             let url = logURL, dir = app.dataDirectory
             let (text, total) = await Task.detached(priority: .utility) { () -> (String, Int64) in

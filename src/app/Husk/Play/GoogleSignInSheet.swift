@@ -48,7 +48,9 @@ struct GoogleSignInSheet: View {
                 }
             }
             .navigationTitle("Sign in with Google")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

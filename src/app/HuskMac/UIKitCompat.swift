@@ -143,16 +143,6 @@ public extension EdgeInsets {
 }
 
 // MARK: - Navigation & Toolbar Shims
-public enum NavTitleModeStub {
-    case inline, large, automatic
-}
-
-public extension View {
-    func navigationBarTitleDisplayMode(_ mode: NavTitleModeStub) -> some View {
-        self
-    }
-}
-
 public extension ToolbarItemPlacement {
     static var topBarTrailing: ToolbarItemPlacement { .primaryAction }
     static var topBarLeading: ToolbarItemPlacement { .cancellationAction }
@@ -162,10 +152,6 @@ public extension ToolbarItemPlacement {
 public extension ToolbarPlacement {
     static var navigationBar: ToolbarPlacement { .automatic }
     static var bottomBar: ToolbarPlacement { .automatic }
-}
-
-public extension ListStyle where Self == InsetListStyle {
-    static var insetGrouped: InsetListStyle { InsetListStyle() }
 }
 
 // MARK: - NSImage / CGImage Support

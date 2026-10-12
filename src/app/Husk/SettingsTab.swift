@@ -88,7 +88,11 @@ struct SettingsTab: View {
                     row(SavedMachineSettings(), "externaldrive.fill", .teal, "Saved Machine", "Snapshots and automatic saving")
                 }
             }
+            #if os(iOS)
             .listStyle(.insetGrouped)
+            #else
+            .listStyle(.inset)
+            #endif
             .navigationTitle("Settings")
         }
     }
@@ -131,7 +135,11 @@ struct SettingsTab: View {
 /// A Form, as the system draws one.
 private struct HuskForm: ViewModifier {
     func body(content: Content) -> some View {
+        #if os(iOS)
         content.navigationBarTitleDisplayMode(.inline)
+        #else
+        content
+        #endif
     }
 }
 
@@ -774,7 +782,9 @@ struct AppearanceSettings: View {
             }
         }
         .navigationTitle("Appearance")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     private func swatch(_ color: Color, selected: Bool) -> some View {
@@ -850,7 +860,9 @@ struct AboutSettings: View {
             }
         }
         .navigationTitle("About")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .sheet(isPresented: $showLogs) { LogView() }
     }
 }

@@ -26,7 +26,9 @@ struct StoreView: View {
             }
             .background(Theme.backdrop)
             .navigationTitle("Store")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            #endif
             .searchable(text: $searchText, prompt: "Search Google Play")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -214,7 +216,11 @@ struct StoreView: View {
                 }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
         .refreshable {
             if debouncedSearchText.isEmpty {
                 await manager.loadBrowseApps()
@@ -421,7 +427,9 @@ struct PlayAppDetailSheet: View {
             }
             .background(Theme.backdrop)
             .navigationTitle(app.title)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
