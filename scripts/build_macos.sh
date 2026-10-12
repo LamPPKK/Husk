@@ -12,7 +12,11 @@ OUT_APP="$BUILD_DIR/Husk.app"
 OUT_ZIP="$BUILD_DIR/Husk-macOS-arm64.zip"
 
 if [ -z "${DEVELOPER_DIR:-}" ]; then
-    if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+    if [ -n "${MD_APPLE_SDK_ROOT:-}" ] && [ -d "${MD_APPLE_SDK_ROOT}/Contents/Developer" ]; then
+        export DEVELOPER_DIR="${MD_APPLE_SDK_ROOT}/Contents/Developer"
+    elif [ -d "/Applications/Xcode_16.2.app/Contents/Developer" ]; then
+        export DEVELOPER_DIR="/Applications/Xcode_16.2.app/Contents/Developer"
+    elif [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
         export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
     else
         export DEVELOPER_DIR="$(xcode-select -p)"
