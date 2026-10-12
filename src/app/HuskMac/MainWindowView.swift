@@ -4,55 +4,42 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum NavigationSection: String, CaseIterable, Identifiable {
+    case home = "Home"
     case library = "Library"
-    case store = "Discover & Store"
+    case store = "Store (Google Play)"
     case downloads = "Downloads"
-    case checks = "Diagnostics"
+    case files = "Files"
+    case faq = "FAQ"
     case settings = "Settings"
+    case checks = "Diagnostics"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
+        case .home: return "house.fill"
         case .library: return "square.grid.2x2.fill"
         case .store: return "bag.fill"
         case .downloads: return "arrow.down.circle.fill"
-        case .checks: return "checkmark.shield.fill"
+        case .files: return "folder.fill"
+        case .faq: return "questionmark.circle.fill"
         case .settings: return "gearshape.fill"
+        case .checks: return "stethoscope"
         }
     }
 }
 
 struct MainWindowView: View {
     @ObservedObject var store = TranslationLayerStore.shared
-    @ObservedObject var downloads = DownloadsManagerMac.shared
+    @ObservedObject var router = Router.shared
+    @ObservedObject var downloads = Downloads.shared
+    @ObservedObject var incoming = IncomingFiles.shared
 
-    @State private var selectedSection: NavigationSection = .library
-    @State private var searchText: String = ""
-    @State private var engineFilter: String = "All"
-    @State private var selectedAppForDetail: TLApp? = nil
+    @State private var selectedSection: NavigationSection = .home
     @State private var isTargetedForDrop: Bool = false
 
-    private var filteredApps: [TLApp] {
-        store.apps.filter { app in
-            let matchesSearch = searchText.isEmpty ||
-                app.label.localizedCaseInsensitiveContains(searchText) ||
-                (app.packageName?.localizedCaseInsensitiveContains(searchText) ?? false)
-
-            let matchesEngine: Bool
-            if engineFilter == "All" {
-                matchesEngine = true
-            } else if engineFilter == "Games" {
-                matchesEngine = app.isGame
-            } else {
-                matchesEngine = app.screenEngine.displayName == engineFilter
-            }
-            return matchesSearch && matchesEngine
-        }
-    }
-
     private var activeDownloadsCount: Int {
-        downloads.items.filter { !$0.isComplete && !$0.isFailed }.count
+        downloads.jobs.filter { !$0.complete && !$0.failed }.count
     }
 
     var body: some View {
@@ -61,15 +48,46 @@ struct MainWindowView: View {
         } detail: {
             detailContent
         }
-        .frame(minWidth: 800, minHeight: 520)
+        .frame(minWidth: 920, minHeight: 600)
         .toolbar {
             toolbarContent
         }
-        .sheet(item: $selectedAppForDetail) { app in
-            GameDetailView(app: app)
+        .sheet(isPresented: $router.showDownloads) {
+            DownloadsTab()
+        }
+        .sheet(isPresented: $router.showFiles) {
+            FilesTab()
+        }
+        .sheet(isPresented: Binding(
+            get: { !incoming.waiting.isEmpty },
+            set: { if !$0 { incoming.discard() } }
+        )) {
+            IncomingChooser()
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop) { providers in
+            handleDrop(providers)
+        }
+        .onChange(of: router.tab) { newTab in
+            switch newTab {
+            case .home: selectedSection = .home
+            case .library: selectedSection = .library
+            case .store: selectedSection = .store
+            case .help: selectedSection = .faq
+            case .settings: selectedSection = .settings
+            }
+        }
+        .onChange(of: selectedSection) { newSection in
+            switch newSection {
+            case .home: router.tab = .home
+            case .library: router.tab = .library
+            case .store: router.tab = .store
+            case .faq: router.tab = .help
+            case .settings: router.tab = .settings
+            case .downloads, .files, .checks: break
+            }
         }
         .overlay {
-            if let busy = store.busy {
+            if let busy = store.busy ?? incoming.preparing {
                 ZStack {
                     Color.black.opacity(0.4)
                         .ignoresSafeArea()
@@ -92,7 +110,7 @@ struct MainWindowView: View {
             set: { if !$0 { store.lastError = nil } }
         )) {
             Alert(
-                title: Text("Import Failed"),
+                title: Text("Notice"),
                 message: Text(store.lastError ?? ""),
                 dismissButton: .default(Text("OK"))
             )
@@ -124,7 +142,7 @@ struct MainWindowView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 180, idealWidth: 200)
+        .frame(minWidth: 190, idealWidth: 220)
     }
 
     // MARK: - Detail Content
@@ -132,187 +150,59 @@ struct MainWindowView: View {
     @ViewBuilder
     private var detailContent: some View {
         switch selectedSection {
+        case .home:
+            HomeView()
         case .library:
-            libraryView
+            LibraryScreen()
         case .store:
-            StoreViewMac()
+            StoreView()
         case .downloads:
-            DownloadsViewMac()
+            DownloadsTab()
+        case .files:
+            FilesTab()
+        case .faq:
+            FAQTab()
+        case .settings:
+            SettingsTab()
         case .checks:
             DeviceChecksViewMac()
-        case .settings:
-            SettingsViewMac()
         }
-    }
-
-    // MARK: - Library View
-
-    private var libraryView: some View {
-        VStack(spacing: 0) {
-            // Filter Bar
-            HStack {
-                Picker("Engine", selection: $engineFilter) {
-                    Text("All").tag("All")
-                    Text("Games").tag("Games")
-                    Text("Unity").tag("Unity")
-                    Text("Cocos2d-x").tag("Cocos2d-x")
-                    Text("SDL").tag("SDL")
-                    Text("Godot").tag("Godot")
-                    Text("Unreal").tag("Unreal Engine")
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 440)
-
-                Spacer()
-
-                Button {
-                    promptAddAPK()
-                } label: {
-                    Label("Add APK", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Color(NSColor.windowBackgroundColor))
-
-            Divider()
-
-            if store.apps.isEmpty {
-                emptyLibraryState
-            } else if filteredApps.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 36))
-                        .foregroundColor(.secondary)
-                    Text("No matching applications")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)], spacing: 20) {
-                        ForEach(filteredApps) { app in
-                            AppCardView(app: app, onPlay: {
-                                store.markPlayed(app)
-                                GameWindowController.play(app: app)
-                            }, onInspect: {
-                                selectedAppForDetail = app
-                            })
-                        }
-                    }
-                    .padding(20)
-                }
-            }
-        }
-        .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop) { providers in
-            handleDrop(providers)
-        }
-        .overlay {
-            if isTargetedForDrop {
-                ZStack {
-                    Color.accentColor.opacity(0.15)
-                        .ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        Image(systemName: "arrow.down.doc.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.accentColor)
-                        Text("Drop APK or XAPK here to import")
-                            .font(.title2.weight(.bold))
-                            .foregroundColor(.accentColor)
-                    }
-                    .padding(32)
-                    .background(Color(NSColor.windowBackgroundColor).opacity(0.95))
-                    .cornerRadius(16)
-                    .shadow(radius: 12)
-                }
-            }
-        }
-    }
-
-    private var emptyLibraryState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "square.and.arrow.down.on.square")
-                .font(.system(size: 56))
-                .foregroundColor(.secondary)
-
-            Text("Your Library is Empty")
-                .font(.title2.weight(.bold))
-
-            Text("Drag & drop an .apk, .xapk, or .apkm file here,\nor click '+ Add APK' to get started.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-
-            HStack(spacing: 12) {
-                Button("Browse APK Files…") {
-                    promptAddAPK()
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("Browse Store") {
-                    selectedSection = .store
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search…", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .frame(width: 140)
-            }
-            .padding(6)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-
+        ToolbarItem(placement: .primaryAction) {
             Button {
-                promptAddAPK()
+                router.addSomething()
             } label: {
-                Image(systemName: "plus")
+                Label("Add APK", systemImage: "plus")
             }
-            .help("Add APK, XAPK, or APKM file")
+            .help("Import APK, XAPK, or APKS")
+        }
 
+        ToolbarItem(placement: .automatic) {
             Button {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: TranslationLayer.sharedStorage.path)
             } label: {
-                Image(systemName: "folder")
+                Label("Shared Storage", systemImage: "folder")
             }
-            .help("Open Android Shared Storage in Finder")
+            .help("Open Shared Storage folder")
+        }
+
+        ToolbarItem(placement: .automatic) {
+            Button {
+                store.runChecks()
+                selectedSection = .checks
+            } label: {
+                Label("Diagnostics", systemImage: "stethoscope")
+            }
+            .help("Run Translation Layer checks")
         }
     }
 
-    // MARK: - Import Helpers
-
-    private func promptAddAPK() {
-        let panel = NSOpenPanel()
-        panel.title = "Select Android Package"
-        panel.prompt = "Import"
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "apk") ?? .data,
-            UTType(filenameExtension: "xapk") ?? .data,
-            UTType(filenameExtension: "apkm") ?? .data,
-            UTType(filenameExtension: "apks") ?? .data
-        ]
-
-        if panel.runModal() == .OK {
-            store.add(panel.urls)
-        }
-    }
+    // MARK: - Drag and Drop
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         var urls: [URL] = []
@@ -322,111 +212,20 @@ struct MainWindowView: View {
             group.enter()
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 if let url = url {
-                    urls.append(url)
+                    let ext = url.pathExtension.lowercased()
+                    if ["apk", "xapk", "apkm", "apks"].contains(ext) {
+                        urls.append(url)
+                    }
                 }
                 group.leave()
             }
         }
 
         group.notify(queue: .main) {
-            let valid = urls.filter { url in
-                let ext = url.pathExtension.lowercased()
-                return ["apk", "xapk", "apkm", "apks"].contains(ext)
-            }
-            if !valid.isEmpty {
-                self.store.add(valid)
+            if !urls.isEmpty {
+                IncomingFiles.shared.receive(urls)
             }
         }
         return true
-    }
-}
-
-// MARK: - App Card View
-
-struct AppCardView: View {
-    let app: TLApp
-    let onPlay: () -> Void
-    let onInspect: () -> Void
-
-    @State private var isHovered = false
-    @State private var renameText = ""
-    @State private var isRenaming = false
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack(alignment: .bottomTrailing) {
-                if let iconPath = app.iconPath, let img = NSImage(contentsOfFile: iconPath) {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 88, height: 88)
-                        .cornerRadius(18)
-                        .shadow(color: Color.black.opacity(isHovered ? 0.35 : 0.2), radius: isHovered ? 8 : 4, y: 3)
-                } else {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.accentColor.opacity(0.18))
-                        .frame(width: 88, height: 88)
-                        .overlay(
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.system(size: 38))
-                                .foregroundColor(.accentColor)
-                        )
-                }
-
-                if isHovered {
-                    Button(action: onPlay) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 34))
-                            .foregroundColor(.white)
-                            .background(Circle().fill(Color.black.opacity(0.6)))
-                    }
-                    .buttonStyle(.plain)
-                    .offset(x: -27, y: -27)
-                    .transition(.opacity)
-                }
-            }
-            .frame(width: 88, height: 88)
-
-            Text(app.label)
-                .font(.headline)
-                .lineLimit(1)
-                .multilineTextAlignment(.center)
-
-            Text(app.screenEngine.displayName)
-                .font(.caption2.weight(.medium))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.blue.opacity(0.15))
-                .foregroundColor(.blue)
-                .cornerRadius(4)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity)
-        .background(isHovered ? Color(NSColor.controlBackgroundColor) : Color.clear)
-        .cornerRadius(12)
-        .onHover { isHovered = $0 }
-        .onTapGesture(count: 2) {
-            onPlay()
-        }
-        .onTapGesture(count: 1) {
-            onInspect()
-        }
-        .contextMenu {
-            Button("Play") { onPlay() }
-            Divider()
-            Button("Game Details…") { onInspect() }
-            Button("Backup Saves…") { SaveBackupMac.promptExport(for: app) }
-            Button("Restore Saves…") { SaveBackupMac.promptRestore(for: app) { _ in } }
-            Divider()
-            Button("Reveal in Finder") {
-                let folder = TranslationLayer.root.appendingPathComponent(app.id)
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
-            }
-            Button(role: .destructive) {
-                TranslationLayerStore.shared.remove(app)
-            } label: {
-                Text("Delete")
-            }
-        }
     }
 }

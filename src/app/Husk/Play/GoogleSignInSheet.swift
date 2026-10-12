@@ -61,6 +61,37 @@ struct GoogleSignInSheet: View {
     }
 }
 
+#if os(macOS)
+struct GoogleLoginWebView: NSViewRepresentable {
+    @Binding var isLoading: Bool
+    let onAuthCaptured: (String, String) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.customUserAgent = PlayDevice.authUserAgent
+
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: [WKWebsiteDataTypeCookies],
+            modifiedSince: Date.distantPast
+        ) {
+            if let url = URL(string: "https://accounts.google.com/EmbeddedSetup") {
+                let req = URLRequest(url: url)
+                webView.load(req)
+            }
+        }
+
+        return webView
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {}
+}
+#else
 /// UIViewRepresentable wrapping WKWebView for Google EmbeddedSetup
 struct GoogleLoginWebView: UIViewRepresentable {
     @Binding var isLoading: Bool
@@ -72,12 +103,10 @@ struct GoogleLoginWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        // Ensure non-persistent or isolated cookies if needed, or let standard store handle it
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.customUserAgent = PlayDevice.authUserAgent
 
-        // Clear any existing cookies for accounts.google.com so user can enter credentials cleanly
         WKWebsiteDataStore.default().removeData(
             ofTypes: [WKWebsiteDataTypeCookies],
             modifiedSince: Date.distantPast
@@ -92,7 +121,10 @@ struct GoogleLoginWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+#endif
 
+extension GoogleLoginWebView {
     class Coordinator: NSObject, WKNavigationDelegate {
         var parent: GoogleLoginWebView
         var captured = false

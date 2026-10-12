@@ -274,6 +274,29 @@ targets:
       - path: Husk/BundleUnpacker.swift
       - path: Husk/Geode.swift
       - path: Husk/SaveBackup.swift
+      - path: Husk/Theme.swift
+      - path: Husk/AppTheme.swift
+      - path: Husk/Holiday.swift
+      - path: Husk/HuskAppIcon.swift
+      - path: Husk/AppIcon.swift
+      - path: Husk/Launcher.swift
+      - path: Husk/Play
+      - path: Husk/FAQTab.swift
+      - path: Husk/SettingsTab.swift
+      - path: Husk/Downloads.swift
+      - path: Husk/DownloadsTab.swift
+      - path: Husk/ItemPages.swift
+      - path: Husk/TechnicalDetails.swift
+      - path: Husk/Compatibility.swift
+      - path: Husk/Showcase.swift
+      - path: Husk/AppDetailView.swift
+      - path: Husk/AppDiagnosis.swift
+      - path: Husk/GameStatus.swift
+      - path: Husk/IncomingFiles.swift
+      - path: Husk/WhatsNew.swift
+      - path: Husk/DiscoverTab.swift
+      - path: Husk/AppSource.swift
+      - path: Husk/FilesTab.swift
       - path: ../translation-layer
       - path: ../translation-layer-next
         excludes:

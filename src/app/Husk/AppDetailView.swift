@@ -71,7 +71,19 @@ enum LibraryRoute: Hashable {
 
     /// Pick APKs or bundles; Husk then asks where they go.
     func addSomething() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.title = "Select Android Package"
+        panel.prompt = "Import"
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        if panel.runModal() == .OK {
+            IncomingFiles.shared.receive(panel.urls)
+        }
+        #else
         HuskFilePicker.present { urls in IncomingFiles.shared.receive(urls) }
+        #endif
     }
 }
 

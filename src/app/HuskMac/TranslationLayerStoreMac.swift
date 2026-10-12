@@ -35,7 +35,14 @@ public enum TLNativeEngine: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - Scan Report & Libraries
+// MARK: - Web Apps & Scan Report
+
+public enum WebAppKind: String {
+    case capacitor, cordova
+    public var assetFolder: String { self == .capacitor ? "public" : "www" }
+    public var scheme: String { self == .capacitor ? "capacitor" : "app" }
+    public var name: String { self == .capacitor ? "Capacitor" : "Cordova" }
+}
 
 public struct TLLibrary: Decodable, Identifiable {
     public let name: String
@@ -46,6 +53,21 @@ public struct TLLibrary: Decodable, Identifiable {
     public let status: String
     public let notes: [String]
     public let maxAlign: Int?
+    public let pages: Int?
+    public let execPages: Int?
+    public let writePages: Int?
+    public let conflictPages: Int?
+    public let layout: String?
+    public let svc: Int?
+    public let tpidrReads: Int?
+    public let tpidrWrites: Int?
+    public let tls: Bool?
+    public let textrel: Bool?
+    public let relocations: Int?
+    public let tlsRelocations: Int?
+    public let unsupportedRelocations: Int?
+    public let packing: String?
+    public let imports: Int?
     public let soname: String?
     public let needed: [String]?
 
@@ -65,10 +87,18 @@ public struct TLReport: Decodable {
     public let systemLibraries: [String]
     public let libraries: [TLLibrary]
 
+    public var webKind: WebAppKind? {
+        switch engine {
+        case "Capacitor": return .capacitor
+        case "Cordova": return .cordova
+        default: return nil
+        }
+    }
+
     public var nativeEngine: TLNativeEngine? {
         guard ok else { return nil }
         if !abis.isEmpty && !abis.contains("arm64-v8a") { return nil }
-        if abis.isEmpty { return dexCount > 0 ? .java : nil }
+        if abis.isEmpty { return dexCount > 0 && webKind == nil ? .java : nil }
         if engine == "Unity 6" { return .java }
         if engine?.hasPrefix("Unity") == true { return .unity }
         if engine == "Cocos" { return libraries.contains(where: { $0.name == "libfmod.so" }) ? .cocos : .java }
@@ -87,6 +117,38 @@ public struct TLReport: Decodable {
     }
 
     public var runsOnNativeRuntime: Bool { nativeEngine != nil }
+
+    public var nativeEngineName: String {
+        engine == "Python" ? "Python (Kivy)" :
+        nativeEngine == .cocos ? "Cocos2d-x" :
+        nativeEngine == .minecraft ? "Minecraft" :
+        nativeEngine == .sdl ? "SDL" :
+        nativeEngine == .ue4 ? "Unreal Engine" :
+        nativeEngine == .gta ? "Rockstar" :
+        nativeEngine == .godot ? "Godot" :
+        nativeEngine == .nativeactivity ? "NativeActivity" :
+        nativeEngine == .flutter ? "Flutter" :
+        nativeEngine == .gamemaker ? "GameMaker" :
+        nativeEngine == .java ? (engine == "libGDX" ? "libGDX" : engine == "SDL" ? "SDL" : engine == "Flutter" ? "Flutter" : "Android") : "Unity"
+    }
+
+    public var displaySummary: String {
+        guard runsOnNativeRuntime else { return summary }
+        let flagged = libraries.filter { $0.abi == "arm64-v8a" && $0.status != "ok" }.count
+        let total = libraries.filter { $0.abi == "arm64-v8a" }.count
+        var text = nativeEngine == .flutter
+            ? "A Flutter app. Its engine and its compiled Dart run natively through Husk's translation layer, which loads its \(total) arm64 libraries itself."
+            : nativeEngine == .java && engine != "libGDX"
+            ? "An Android app. Husk runs its code on its own Java runtime" + (total > 0 ? " and loads its \(total) arm64 libraries itself." : ".")
+            : "A \(nativeEngineName) game. It runs through Husk's native runtime, which loads its \(total) arm64 libraries itself."
+        if nativeEngine == .cocos || nativeEngine == .minecraft || nativeEngine == .ue4 || nativeEngine == .gta { text += " It is a landscape game: Husk turns the screen for it." }
+        else if nativeEngine == .sdl || nativeEngine == .nativeactivity || nativeEngine == .godot || nativeEngine == .gamemaker { text += " Husk turns the screen the way the game asks for." }
+        if flagged > 0 {
+            text += " \(flagged) of them use tricks the older loader could not handle; the native runtime handles those too, "
+                  + "except for optional anti-tamper code, which it leaves out."
+        }
+        return text
+    }
 }
 
 public struct TLCheck: Decodable, Identifiable {
@@ -107,12 +169,15 @@ public struct TLApp: Identifiable, Hashable {
     public var lastPlayed: Date?
     public var packageName: String?
 
+    public var isGameCategory: Bool { false }
+
     public var isGame: Bool {
         if let engine = report?.nativeEngine {
             return engine != .flutter
         }
         return report?.engine != "Flutter"
     }
+
 
     public var screenEngine: TLNativeEngine {
         report?.nativeEngine ?? .unity
@@ -196,11 +261,11 @@ public final class TranslationLayerStore: ObservableObject {
         reload()
     }
 
-    public func add(_ urls: [URL]) {
+    public func add(_ urls: [URL], move: Bool = false) {
         guard !urls.isEmpty, busy == nil else { return }
         busy = urls.count == 1 ? "Adding \(urls[0].lastPathComponent)…" : "Adding \(urls.count) APKs…"
         Task.detached(priority: .userInitiated) {
-            let failure = Self.ingest(urls)
+            let failure = Self.ingest(urls, move: move)
             await MainActor.run {
                 self.busy = nil
                 self.lastError = failure
@@ -263,7 +328,7 @@ public final class TranslationLayerStore: ObservableObject {
         )
     }
 
-    nonisolated private static func ingest(_ urls: [URL]) -> String? {
+    nonisolated private static func ingest(_ urls: [URL], move: Bool = false) -> String? {
         let fm = FileManager.default
         let dir = TranslationLayer.root.appendingPathComponent(UUID().uuidString, isDirectory: true)
 
@@ -277,13 +342,18 @@ public final class TranslationLayerStore: ObservableObject {
                 if BundleUnpacker.extensions.contains(ext) {
                     let names = try BundleUnpacker.unpack(url, into: dir)
                     HuskLog.log("tl", "Unpacked \(url.lastPathComponent): \(names.joined(separator: ", "))")
+                    if move { try? fm.removeItem(at: url) }
                     continue
                 }
 
                 var name = url.lastPathComponent
                 if !name.lowercased().hasSuffix(".apk") { name += ".apk" }
                 let dest = dir.appendingPathComponent(name)
-                try fm.copyItem(at: url, to: dest)
+                if move {
+                    try fm.moveItem(at: url, to: dest)
+                } else {
+                    try fm.copyItem(at: url, to: dest)
+                }
             }
         } catch {
             try? fm.removeItem(at: dir)

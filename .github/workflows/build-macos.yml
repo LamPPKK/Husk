@@ -2,11 +2,11 @@ name: Build Husk for macOS
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, arm ]
     tags:
       - 'v*'
   pull_request:
-    branches: [ main ]
+    branches: [ main, arm ]
   workflow_dispatch:
 
 jobs:

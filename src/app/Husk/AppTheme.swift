@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// The app's accent colour, chosen by the user and remembered.
 ///
@@ -67,14 +71,22 @@ extension Color {
 
     var themeHex: String {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        #if canImport(UIKit)
         UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        #elseif canImport(AppKit)
+        NSColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        #endif
         return String(format: "#%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
     }
 
     /// Whether text on this colour should be dark.
     var isLight: Bool {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        #if canImport(UIKit)
         UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        #elseif canImport(AppKit)
+        NSColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        #endif
         return 0.299 * r + 0.587 * g + 0.114 * b > 0.6
     }
 }

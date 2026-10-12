@@ -145,7 +145,9 @@ struct DiscoverView: View {
                     _ = try? GuestBridge.shared.shell(intent, timeout: 5)
                 }
                 .buttonStyle(.bordered)
+                #if os(iOS)
                 .buttonBorderShape(.capsule)
+                #endif
             } else if let progress = progress {
                 ZStack {
                     Circle().stroke(Color(uiColor: .tertiarySystemFill), lineWidth: 3)
@@ -158,7 +160,9 @@ struct DiscoverView: View {
             } else {
                 Button("Get") { manager.downloadAndInstall(app: app) }
                     .buttonStyle(.borderedProminent)
+                    #if os(iOS)
                     .buttonBorderShape(.capsule)
+                    #endif
             }
         }
         .buttonStyle(.borderless)

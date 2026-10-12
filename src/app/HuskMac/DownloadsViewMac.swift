@@ -23,7 +23,7 @@ struct DownloadsViewMac: View {
             } else {
                 List {
                     ForEach(downloads.items) { item in
-                        DownloadRow(item: item)
+                        MacDownloadRow(item: item)
                     }
                 }
                 .listStyle(.inset)
@@ -32,7 +32,7 @@ struct DownloadsViewMac: View {
     }
 }
 
-struct DownloadRow: View {
+struct MacDownloadRow: View {
     let item: DownloadTaskItem
 
     var body: some View {

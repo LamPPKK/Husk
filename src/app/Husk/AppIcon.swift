@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import ImageIO
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Decoded app icons, kept at the size they are drawn.
 ///

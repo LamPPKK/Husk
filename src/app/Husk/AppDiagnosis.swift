@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+import Foundation
 
 /// Why an app will not run, or why it stopped, in words: from what the APK is (before it starts) and from what its run logged.
 ///

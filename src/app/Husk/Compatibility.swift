@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Husk's compatibility list (antiweb.lol): how each app runs for everyone, next to how it ran on this iPhone (GameStatus).
 ///
@@ -152,12 +156,23 @@ final class CompatibilityStore: ObservableObject {
 
     /// The app's launcher icon as a small PNG, for a first report on an app the list has no icon for.
     static func iconPNG(_ path: String?) -> String? {
+        #if canImport(UIKit)
         guard let path, let image = UIImage(contentsOfFile: path) else { return nil }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let size = CGSize(width: 128, height: 128)
         let png = UIGraphicsImageRenderer(size: size, format: format).pngData { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
         return png.count <= 60_000 ? png.base64EncodedString() : nil
+        #elseif canImport(AppKit)
+        guard let path, let image = NSImage(contentsOfFile: path) else { return nil }
+        let size = NSSize(width: 128, height: 128)
+        let resized = NSImage(size: size)
+        resized.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size))
+        resized.unlockFocus()
+        guard let png = resized.pngData() else { return nil }
+        return png.count <= 60_000 ? png.base64EncodedString() : nil
+        #endif
     }
 
     func send(package: String, name: String, isGame: Bool, status: Status, notes: String, author: String, iconPath: String? = nil) async throws {

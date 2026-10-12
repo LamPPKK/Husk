@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// How a game did the last time it was played here, noted by Husk itself: it played, it crashed, or it would not start.
 ///

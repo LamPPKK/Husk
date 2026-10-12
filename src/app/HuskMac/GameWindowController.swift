@@ -272,6 +272,14 @@ public final class GameWindowController: NSWindowController, NSWindowDelegate {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    @MainActor
+    public struct Launcher {
+        public func launchGame(_ app: TLApp) {
+            GameWindowController.play(app: app)
+        }
+    }
+    public static let shared = Launcher()
+
     public static func play(app: TLApp) {
         if let existing = current {
             existing.window?.makeKeyAndOrderFront(nil)

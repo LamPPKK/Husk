@@ -141,7 +141,9 @@ struct StoreView: View {
                         .padding(.vertical, 12)
                     }
                     .buttonStyle(.borderedProminent)
+                    #if os(iOS)
                     .buttonBorderShape(.capsule)
+                    #endif
 
                     // Google Account Button
                     Button {
@@ -156,7 +158,9 @@ struct StoreView: View {
                         .padding(.vertical, 10)
                     }
                     .buttonStyle(.bordered)
+                    #if os(iOS)
                     .buttonBorderShape(.capsule)
+                    #endif
                 }
                 .padding(.top, 8)
             }
@@ -306,7 +310,9 @@ struct StoreView: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
+                #if os(iOS)
                 .buttonBorderShape(.capsule)
+                #endif
             }
         }
     }
@@ -447,7 +453,9 @@ struct PlayAppDetailSheet: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
+                #if os(iOS)
                 .buttonBorderShape(.capsule)
+                #endif
             }
         }
     }

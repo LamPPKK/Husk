@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import AVFoundation
-import BackgroundTasks
 import Foundation
+#if canImport(BackgroundTasks) && !os(macOS)
+import BackgroundTasks
+#endif
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 #if canImport(ActivityKit)
 import ActivityKit
 #endif
@@ -694,7 +700,7 @@ enum LiveDownload {
     }
 }
 
-#if canImport(ActivityKit)
+#if canImport(ActivityKit) && os(iOS)
 @available(iOS 16.1, *)
 @MainActor
 private enum Live {
@@ -751,8 +757,15 @@ private enum Live {
         }
     }
 }
+#else
+@MainActor
+private enum Live {
+    static func end() {}
+    static func update(jobs: [Downloads.Job], speed: Double) {}
+}
 #endif
 
+#if canImport(BackgroundTasks) && !os(macOS)
 /// The download as a continued processing task (iOS 26): the system keeps Husk running in the background for it and shows its
 /// progress in the Dynamic Island and on the Lock Screen.
 @available(iOS 26.0, *)
@@ -847,11 +860,28 @@ enum ContinuedDownload {
         return true
     }
 }
+#else
+@MainActor
+enum ContinuedDownload {
+    static var running: Bool { false }
+    static var active: Bool { false }
+    static func begin(title: String) {}
+    @discardableResult
+    static func update(jobs: [Downloads.Job], speed: Double) -> Bool { false }
+}
+#endif
 
 /// Keeps Husk running in the background while downloads are active, by playing silence: iOS lets an app that is playing audio keep
 /// running, so Husk goes on downloading at full speed and its Live Activity stays current. It mixes with other audio (music keeps
 /// playing) and stops as soon as nothing is downloading. The way an App Store app would do this is a continued processing task, which
-/// iOS refuses a sideloaded copy (its bundle ID no longer matches the identifiers in Info.plist).
+#if os(macOS)
+@MainActor
+final class DownloadKeepAlive {
+    static let shared = DownloadKeepAlive()
+    private(set) var running = false
+    func set(_ on: Bool) {}
+}
+#else
 @MainActor
 final class DownloadKeepAlive {
     static let shared = DownloadKeepAlive()
@@ -919,3 +949,4 @@ final class DownloadKeepAlive {
         HuskLog.log("downloads", "keep-alive off")
     }
 }
+#endif

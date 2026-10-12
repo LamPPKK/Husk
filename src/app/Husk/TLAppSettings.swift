@@ -141,7 +141,7 @@ struct TLAppSettings: Codable, Equatable {
 
 // MARK: - The settings page
 
-#if canImport(UIKit)
+#if canImport(UIKit) || canImport(AppKit)
 /// One game's settings, opened from its page or from its tile's menu.
 struct TLAppSettingsView: View {
     let app: TLApp

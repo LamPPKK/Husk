@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// The app icon, as something a person can choose.
 ///

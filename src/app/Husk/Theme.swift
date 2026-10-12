@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Husk's visual vocabulary.
 ///
@@ -71,11 +75,19 @@ enum Theme {
     /// the window `nil`, and SwiftUI does not reliably let go of a scheme it has once forced. The window's
     /// own override does, and sheets and covers presented from it inherit it.
     static func apply(_ appearance: Appearance) {
+        #if canImport(UIKit)
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             for window in scene.windows {
                 window.overrideUserInterfaceStyle = appearance.style
             }
         }
+        #elseif canImport(AppKit)
+        switch appearance {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+        #endif
     }
 
     static let cardCorner: CGFloat = 14

@@ -123,90 +123,20 @@ struct GamePage: View {
         return runs ? "Ready to play" : "May not run on this iPhone"
     }
 
+    private var lastPlayedText: String {
+        app.lastPlayed?.formatted(date: .abbreviated, time: .shortened) ?? "Never"
+    }
+
     var body: some View {
         List {
-            Section {
-                PageHero(item: .game(app), subtitle: subtitle) { primary }
-            } footer: {
-                if isGeodeLauncher {
-                    Text("This is Geode's Android launcher. On Husk, Geode runs inside Geometry Dash instead: turn it on here "
-                       + "(or in Geometry Dash's settings, under Mods), then start Geometry Dash and use Geode's button on its "
-                       + "main menu to get mods. This APK supplies a library Geode needs, so keep it.")
-                } else if let other = blockedBy {
-                    Text("\(other) is still loaded, and a game cannot be unloaded once it has started. Close Husk with the "
-                       + "button above, then open it again to play \(app.label).")
-                } else if !runs {
-                    Text("This APK has no 64-bit code Husk can run, so it will probably not start.")
-                }
-            }
-            .heroRow()
-
-            // what the files say before it starts: a damaged APK, the wrong CPU, a missing piece, protection that refuses Husk
-            if let d = preflight {
-                Section {
-                    AppDiagnosisCard(diagnosis: d)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
-                }
-            }
-            // why it stopped last time, until it plays again
-            if let d = GameStatusStore.shared.diagnosis(app.id), d != preflight {
-                Section("Last Run") {
-                    AppDiagnosisCard(diagnosis: d, showsEvidence: true)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
-                }
-            }
-
-            if let compatSubject, !isGeodeLauncher {
-                CompatibilitySection(subject: compatSubject, reporting: $reporting)
-            }
-
-            if !ShowcaseStore.shared.pictures(for: app.packageName).isEmpty {
-                Section("Screenshots") {
-                    ShowcaseGallery(package: app.packageName)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-                }
-            }
-
-            Section {
-                NavigationLink(value: LibraryRoute.gameSettings(app.id)) {
-                    Label("Game Settings", systemImage: "slider.horizontal.3")
-                }
-                NavigationLink(value: LibraryRoute.gameReport(app.id)) {
-                    Label("Technical Details", systemImage: "cpu")
-                }
-            }
-
-            if !isGeodeLauncher {
-                Section {
-                    Button { backUp() } label: { Label("Back Up Saves", systemImage: "square.and.arrow.up") }
-                        .disabled(savesBusy || !SaveBackup.hasData(app))
-                    Button { pickRestore() } label: { Label("Restore Saves", systemImage: "clock.arrow.circlepath") }
-                        .disabled(savesBusy || loadedNow)
-                } header: {
-                    Text("Saves")
-                } footer: {
-                    if let savesMessage { Text(savesMessage) }
-                    else if loadedNow { Text("\(app.label) has been started in this run of Husk. Close Husk and open it again to restore saves.") }
-                    else { Text("A backup is a .zip of everything \(app.label) has saved in Husk, to keep in Files or move to another device.") }
-                }
-            }
-
-            Section("About") {
-                LabeledContent("Runs With", value: app.report?.runnerName ?? "Unknown")
-                if let st = GameStatusStore.shared.status(app.id) {
-                    LabeledContent("Last Result") {
-                        Label(st.result.label, systemImage: st.result.symbol).foregroundStyle(st.result.color)
-                    }
-                }
-                LabeledContent("Last Played", value: app.lastPlayed.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never")
-                LabeledContent("Size", value: fileBytes(app.apks))
-            }
-
-            Section {
-                Button(role: .destructive) { confirmRemove = true } label: {
-                    Label("Remove Game", systemImage: "trash")
-                }
-            }
+            heroSection
+            diagnosticsSection
+            compatSection
+            screenshotsSection
+            settingsSection
+            savesSection
+            aboutSection
+            removeSection
         }
         .listStyle(.insetGrouped)
         .navigationTitle(app.label)
@@ -224,15 +154,13 @@ struct GamePage: View {
         }
         .confirmationDialog("Close Husk?", isPresented: $confirmQuit, titleVisibility: .visible) {
             Button("Close Husk") {
-                // The game that is loaded is closed with Husk, which is the normal way out for it, not a crash; and this
-                // one starts by itself when Husk is opened again.
                 Router.shared.switchTo(app.id)
                 CrashReport.gameEnded()
                 HuskLog.flushNow()
                 exit(0)
             }
         } message: {
-            Text("\(blockedBy ?? "The other game") is still loaded and only one game can run per session. Husk closes; open it again and \(app.label) starts by itself.")
+            Text("\(blockedBy ?? "The other game") is still loaded and only one game can run per session.")
         }
         .confirmationDialog("Remove \(app.label)?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
@@ -244,10 +172,103 @@ struct GamePage: View {
         }
         .id(jit.attachGeneration)
         .onAppear {
-            // Kept until JIT is on: this page is rebuilt when it attaches (.id above), and plays then.
             guard Router.shared.autoPlay == app.id, Launcher.jitOn, blockedBy == nil else { return }
             Router.shared.autoPlay = nil
             play()
+        }
+    }
+
+    @ViewBuilder private var heroSection: some View {
+        Section {
+            PageHero(item: .game(app), subtitle: subtitle) { primary }
+        } footer: {
+            if isGeodeLauncher {
+                Text("This is Geode's Android launcher.")
+            } else if let other = blockedBy {
+                Text("\(other) is still loaded.")
+            } else if !runs {
+                Text("This APK has no 64-bit code Husk can run, so it will probably not start.")
+            }
+        }
+        .heroRow()
+    }
+
+    @ViewBuilder private var diagnosticsSection: some View {
+        if let d = preflight {
+            Section {
+                AppDiagnosisCard(diagnosis: d)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+            }
+        }
+        if let d = GameStatusStore.shared.diagnosis(app.id), d != preflight {
+            Section("Last Run") {
+                AppDiagnosisCard(diagnosis: d, showsEvidence: true)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+            }
+        }
+    }
+
+    @ViewBuilder private var compatSection: some View {
+        if let compatSubject, !isGeodeLauncher {
+            CompatibilitySection(subject: compatSubject, reporting: $reporting)
+        }
+    }
+
+    @ViewBuilder private var screenshotsSection: some View {
+        if !ShowcaseStore.shared.pictures(for: app.packageName).isEmpty {
+            Section("Screenshots") {
+                ShowcaseGallery(package: app.packageName)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+            }
+        }
+    }
+
+    @ViewBuilder private var settingsSection: some View {
+        Section {
+            NavigationLink(value: LibraryRoute.gameSettings(app.id)) {
+                Label("Game Settings", systemImage: "slider.horizontal.3")
+            }
+            NavigationLink(value: LibraryRoute.gameReport(app.id)) {
+                Label("Technical Details", systemImage: "cpu")
+            }
+        }
+    }
+
+    @ViewBuilder private var savesSection: some View {
+        if !isGeodeLauncher {
+            Section {
+                Button { backUp() } label: { Label("Back Up Saves", systemImage: "square.and.arrow.up") }
+                    .disabled(savesBusy || !SaveBackup.hasData(app))
+                Button { pickRestore() } label: { Label("Restore Saves", systemImage: "clock.arrow.circlepath") }
+                    .disabled(savesBusy || loadedNow)
+            } header: {
+                Text("Saves")
+            } footer: {
+                if let savesMessage { Text(savesMessage) }
+                else if loadedNow { Text("\(app.label) has been started in this run of Husk.") }
+                else { Text("A backup is a .zip of everything \(app.label) has saved in Husk.") }
+            }
+        }
+    }
+
+    @ViewBuilder private var aboutSection: some View {
+        Section("About") {
+            LabeledContent("Runs With", value: app.report?.runnerName ?? "Unknown")
+            if let st = GameStatusStore.shared.status(app.id) {
+                LabeledContent("Last Result") {
+                    Label(st.result.label, systemImage: st.result.symbol).foregroundStyle(st.result.color)
+                }
+            }
+            LabeledContent("Last Played", value: lastPlayedText)
+            LabeledContent("Size", value: fileBytes(app.apks))
+        }
+    }
+
+    @ViewBuilder private var removeSection: some View {
+        Section {
+            Button(role: .destructive) { confirmRemove = true } label: {
+                Label("Remove Game", systemImage: "trash")
+            }
         }
     }
 
@@ -274,12 +295,16 @@ struct GamePage: View {
 
     /// Full screen, or in a window over Husk when Multitasking says so for this app.
     private func start() {
+        #if os(macOS)
+        GameWindowController.shared.launchGame(app)
+        #else
         if app.report?.runsOnNativeRuntime == true || app.report?.webKind != nil, AppWindows.opensInWindow(app) {
             AppWindows.shared.open(app)
         } else {
             AppWindows.shared.close(app)
             playing = true
         }
+        #endif
     }
 
     /// This game's engine is loaded in this run of Husk, so its files may be open: no restoring under it.
