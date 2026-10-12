@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Build Husk native macOS application for Apple Silicon (ARM64).
+# Build Husk native macOS application for Intel (x86_64).
 #
 set -euo pipefail
 
@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HUSK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$HUSK_ROOT/build/macos"
 OUT_APP="$BUILD_DIR/Husk.app"
-OUT_ZIP="$BUILD_DIR/Husk-macOS-arm64.zip"
+OUT_ZIP="$BUILD_DIR/Husk-macOS-x86_64.zip"
 
 if [ -z "${DEVELOPER_DIR:-}" ]; then
     if [ -n "${MD_APPLE_SDK_ROOT:-}" ] && [ -d "${MD_APPLE_SDK_ROOT}/Contents/Developer" ]; then
@@ -24,7 +24,7 @@ if [ -z "${DEVELOPER_DIR:-}" ]; then
 fi
 
 echo "=========================================================="
-echo "  Building Husk for macOS (Apple Silicon ARM64)"
+echo "  Building Husk for macOS (Intel x86_64)"
 echo "=========================================================="
 
 # 1. Regenerate Xcode project if xcodegen is present
@@ -36,7 +36,7 @@ else
 fi
 
 # 2. Build HuskMac scheme with xcodebuild
-echo "==> Building HuskMac target (Release, ARM64)..."
+echo "==> Building HuskMac target (Release, x86_64)..."
 DERIVED_DATA="$BUILD_DIR/DerivedData"
 rm -rf "$DERIVED_DATA"
 mkdir -p "$BUILD_DIR"
@@ -45,6 +45,8 @@ xcodebuild -project "$HUSK_ROOT/src/app/Husk.xcodeproj" \
     -scheme HuskMac \
     -configuration Release \
     -derivedDataPath "$DERIVED_DATA" \
+    ARCHS=x86_64 \
+    ONLY_ACTIVE_ARCH=NO \
     CODE_SIGN_IDENTITY="" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO \
@@ -72,7 +74,7 @@ fi
 # 5. Package as ZIP for distribution
 echo "==> Packaging into $OUT_ZIP..."
 rm -f "$OUT_ZIP"
-(cd "$BUILD_DIR" && zip -r -y -q "Husk-macOS-arm64.zip" "Husk.app")
+(cd "$BUILD_DIR" && zip -r -y -q "Husk-macOS-x86_64.zip" "Husk.app")
 
 # 6. Verify binary architecture
 echo "==> Verification:"
@@ -80,7 +82,7 @@ file "$OUT_APP/Contents/MacOS/HuskMac"
 codesign -d --entitlements :- "$OUT_APP" 2>&1 | head -n 20 || true
 
 echo "=========================================================="
-echo "  Successfully built Husk for macOS!"
+echo "  Successfully built Husk for macOS (x86_64)!"
 echo "  App bundle: $OUT_APP"
 echo "  Zip archive: $OUT_ZIP"
 echo "=========================================================="

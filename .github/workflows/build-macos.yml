@@ -1,17 +1,17 @@
-name: Build Husk for macOS
+name: Build Husk for macOS (x86_64)
 
 on:
   push:
-    branches: [ main, arm ]
+    branches: [ x86 ]
     tags:
       - 'v*'
   pull_request:
-    branches: [ main, arm ]
+    branches: [ x86 ]
   workflow_dispatch:
 
 jobs:
   build-macos:
-    name: Build macOS (Apple Silicon ARM64)
+    name: Build macOS (Intel x86_64)
     runs-on: macos-14
     permissions:
       contents: write
@@ -38,14 +38,14 @@ jobs:
       - name: Upload macOS App Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Husk-macOS-arm64
-          path: build/macos/Husk-macOS-arm64.zip
+          name: Husk-macOS-x86_64
+          path: build/macos/Husk-macOS-x86_64.zip
           retention-days: 14
 
       - name: Release Asset (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/macos/Husk-macOS-arm64.zip
+          files: build/macos/Husk-macOS-x86_64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

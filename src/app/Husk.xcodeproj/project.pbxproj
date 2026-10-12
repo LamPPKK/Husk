@@ -1676,7 +1676,7 @@
 		8F45F9ABA28C295B88B84012 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = arm64;
+				ARCHS = x86_64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = NO;
@@ -1945,7 +1945,7 @@
 		F0329061F0E9B55AE689D6CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = arm64;
+				ARCHS = x86_64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = NO;
