@@ -293,108 +293,118 @@ struct InputSettings: View {
         QemuRunner.validResolution(w: Int(widthText) ?? 0, h: Int(heightText) ?? 0)
     }
 
+    private var screenFooterText: String {
+        if customRes {
+            return "A custom resolution sets the shape itself, so this does nothing while it is on. Type a wide size for landscape."
+        } else {
+            return "Android cannot reshape a screen once it is running, so a landscape game on a portrait screen gets letterboxed into a band and looks tiny. Creating it landscape is the only way it can fill it — portrait apps are letterboxed instead. Costs one cold boot."
+        }
+    }
+
+    private var resolutionFooterText: String {
+        return "The panel is built when the machine starts, so a change costs one cold boot, and the next save replaces the machine saved at the old size — changing back costs another. Sizes are rounded to a multiple of eight. Bigger is slower: every pixel is drawn by an emulated phone. Android's density does not change with the panel, so a larger one shows more rather than bigger."
+    }
+
+    @ViewBuilder
+    private var screenSection: some View {
+        Section {
+            Picker("Screen", selection: $landscapeGuest) {
+                Text("Portrait").tag(false)
+                Text("Landscape").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .disabled(customRes)
+            .onChange(of: landscapeGuest) { v in
+                UserDefaults.standard.set(v, forKey: "husk.landscapeGuest")
+                HuskLog.log("ui", v ? "guest panel will be landscape"
+                                    : "guest panel will be portrait")
+            }
+        } header: {
+            Text("Screen")
+        } footer: {
+            Text(screenFooterText)
+        }
+    }
+
+    @ViewBuilder
+    private var resolutionSection: some View {
+        Section {
+            Toggle("Custom resolution", isOn: $customRes)
+                .onChange(of: customRes) { v in
+                    UserDefaults.standard.set(v, forKey: "husk.customRes")
+                    store()
+                    HuskLog.log("ui", v ? "custom resolution on: \(widthText)x\(heightText)"
+                                        : "custom resolution off")
+                }
+
+            if customRes {
+                Picker("Preset", selection: Binding(
+                    get: { presetIndex },
+                    set: { i in
+                        guard i >= 0, i < Self.presets.count else { return }
+                        widthText = String(Self.presets[i].w)
+                        heightText = String(Self.presets[i].h)
+                        store()
+                    })) {
+                    ForEach(0..<Self.presets.count, id: \.self) { i in
+                        Text(Self.presets[i].name).tag(i)
+                    }
+                    Text("Custom").tag(-1)
+                }
+
+                HStack {
+                    Text("Width")
+                    Spacer()
+                    TextField("720", text: $widthText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .font(.technical())
+                        .frame(width: 90)
+                        .onChange(of: widthText) { _ in store() }
+                }
+                HStack {
+                    Text("Height")
+                    Spacer()
+                    TextField("1280", text: $heightText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .font(.technical())
+                        .frame(width: 90)
+                        .onChange(of: heightText) { _ in store() }
+                }
+
+                if let size = effective {
+                    DetailRow(label: "Android will get",
+                              value: "\(size.w) × \(size.h)")
+                } else {
+                    Text("Both sides must be between 240 and 2560.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+
+            DetailRow(label: "Running now", value: running)
+        } header: {
+            Text("Resolution")
+        } footer: {
+            Text(resolutionFooterText)
+        }
+    }
+
+    @ViewBuilder
+    private var controlsSection: some View {
+        Section {
+            Text("Touch is always on. The keyboard and the rotate control are in the pill at the bottom of the guest's screen; a gamepad and a pointer are not wired through yet.")
+                .font(.footnote).foregroundStyle(.secondary)
+        } header: {
+            Text("Controls")
+        }
+    }
+
     var body: some View {
         Form {
-            Section {
-                Picker("Screen", selection: $landscapeGuest) {
-                    Text("Portrait").tag(false)
-                    Text("Landscape").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .disabled(customRes)
-                .onChange(of: landscapeGuest) { v in
-                    UserDefaults.standard.set(v, forKey: "husk.landscapeGuest")
-                    HuskLog.log("ui", v ? "guest panel will be landscape"
-                                        : "guest panel will be portrait")
-                }
-            } header: {
-                Text("Screen")
-            } footer: {
-                Text(customRes
-                     ? "A custom resolution sets the shape itself, so this does nothing "
-                     + "while it is on. Type a wide size for landscape."
-                     : "Android cannot reshape a screen once it is running, so a "
-                     + "landscape game on a portrait screen gets letterboxed into a "
-                     + "band and looks tiny. Creating it landscape is the only way it "
-                     + "can fill it — portrait apps are letterboxed instead. Costs one "
-                     + "cold boot.")
-            }
-
-            Section {
-                Toggle("Custom resolution", isOn: $customRes)
-                    .onChange(of: customRes) { v in
-                        UserDefaults.standard.set(v, forKey: "husk.customRes")
-                        store()
-                        HuskLog.log("ui", v ? "custom resolution on: "
-                                            + "\(widthText)x\(heightText)"
-                                            : "custom resolution off")
-                    }
-
-                if customRes {
-                    Picker("Preset", selection: Binding(
-                        get: { presetIndex },
-                        set: { i in
-                            guard i >= 0, i < Self.presets.count else { return }
-                            widthText = String(Self.presets[i].w)
-                            heightText = String(Self.presets[i].h)
-                            store()
-                        })) {
-                        ForEach(0..<Self.presets.count, id: \.self) { i in
-                            Text(Self.presets[i].name).tag(i)
-                        }
-                        Text("Custom").tag(-1)
-                    }
-
-                    HStack {
-                        Text("Width")
-                        Spacer()
-                        TextField("720", text: $widthText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.technical())
-                            .frame(width: 90)
-                            .onChange(of: widthText) { _ in store() }
-                    }
-                    HStack {
-                        Text("Height")
-                        Spacer()
-                        TextField("1280", text: $heightText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.technical())
-                            .frame(width: 90)
-                            .onChange(of: heightText) { _ in store() }
-                    }
-
-                    if let size = effective {
-                        DetailRow(label: "Android will get",
-                                  value: "\(size.w) × \(size.h)")
-                    } else {
-                        Text("Both sides must be between 240 and 2560.")
-                            .font(.caption).foregroundStyle(.orange)
-                    }
-                }
-
-                DetailRow(label: "Running now", value: running)
-            } header: {
-                Text("Resolution")
-            } footer: {
-                Text("The panel is built when the machine starts, so a change costs "
-                   + "one cold boot, and the next save replaces the machine saved at "
-                   + "the old size — changing back costs another. Sizes are rounded "
-                   + "to a multiple of eight. Bigger is slower: every pixel is drawn "
-                   + "by an emulated phone. Android's density does not change with "
-                   + "the panel, so a larger one shows more rather than bigger.")
-            }
-
-            Section {
-                Text("Touch is always on. The keyboard and the rotate control are "
-                   + "in the pill at the bottom of the guest's screen; a gamepad "
-                   + "and a pointer are not wired through yet.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            } header: {
-                Text("Controls")
-            }
+            screenSection
+            resolutionSection
+            controlsSection
         }
         .huskForm()
         .navigationTitle("Input")
