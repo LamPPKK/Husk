@@ -6,6 +6,7 @@ options:
     # it installs on the iOS 16 versions TrollStore runs on. QEMU, ANGLE and
     # rppairing are built for 15.5, below it.
     iOS: "16.0"
+    macOS: "13.0"
   createIntermediateGroups: true
 
 settings:
@@ -258,6 +259,76 @@ targets:
             codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none "$DST"
           fi
         basedOnDependencyAnalysis: false
+
+  # Native macOS Application for Apple Silicon (ARM64)
+  HuskMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: HuskMac
+      - path: Husk/Resources
+        buildPhase: resources
+      - path: Husk/ApkMetadata.swift
+      - path: Husk/TLAppSettings.swift
+      - path: Husk/BundleUnpacker.swift
+      - path: Husk/Geode.swift
+      - path: Husk/SaveBackup.swift
+      - path: ../translation-layer
+      - path: ../translation-layer-next
+        excludes:
+          - "husk-tl-unity-app.h"
+    settings:
+      base:
+        SUPPORTED_PLATFORMS: macosx
+        SDKROOT: macosx
+        PRODUCT_BUNDLE_IDENTIFIER: com.husk.mac
+        INFOPLIST_FILE: HuskMac/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HuskMac/HuskMac.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: HuskMac/HuskMacBridge.h
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: NO
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: YES
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/../translation-layer"
+          - "$(SRCROOT)/../translation-layer-next"
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-lz"
+          - "-lresolv"
+          - "-lsqlite3"
+          - "-framework"
+          - "AudioToolbox"
+          - "-framework"
+          - "CoreText"
+          - "-framework"
+          - "CoreGraphics"
+          - "-framework"
+          - "ImageIO"
+          - "-framework"
+          - "WebKit"
+          - "-framework"
+          - "VideoToolbox"
+          - "-framework"
+          - "CoreMedia"
+          - "-framework"
+          - "CoreVideo"
+          - "-framework"
+          - "Accelerate"
+          - "-framework"
+          - "Security"
+          - "-framework"
+          - "AppKit"
+          - "-framework"
+          - "Metal"
+          - "-framework"
+          - "QuartzCore"
 
   # Built-in StikJIT's debugger (docs/06-built-in-jit.md). A process cannot
   # synchronously debug itself, so StikJIT runs here and attaches to the app.

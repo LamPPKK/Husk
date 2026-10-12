@@ -11,8 +11,8 @@ import Foundation
 @MainActor
 final class GeodeSupport: ObservableObject {
     static let shared = GeodeSupport()
-    static let gamePackage = "com.robtopx.geometryjump"
-    static let launcherPackage = "com.geode.launcher"
+    nonisolated static let gamePackage = "com.robtopx.geometryjump"
+    nonisolated static let launcherPackage = "com.geode.launcher"
 
     enum Status: Equatable {
         case idle

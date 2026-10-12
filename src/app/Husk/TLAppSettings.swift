@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// What a person can change about how one game runs here, kept in the game's own folder (`settings.json`) so it goes when the game
 /// does. Like LiveContainer's per-app settings: each game has its own, and nothing here touches another game.
@@ -44,7 +48,12 @@ struct TLAppSettings: Codable, Equatable {
             case .low: return 1
             case .medium: return 1.5
             case .high: return 2
-            case .native: return UIScreen.main.scale
+            case .native:
+                #if canImport(UIKit)
+                return UIScreen.main.scale
+                #else
+                return NSScreen.main?.backingScaleFactor ?? 2
+                #endif
             }
         }
     }
@@ -132,6 +141,7 @@ struct TLAppSettings: Codable, Equatable {
 
 // MARK: - The settings page
 
+#if canImport(UIKit)
 /// One game's settings, opened from its page or from its tile's menu.
 struct TLAppSettingsView: View {
     let app: TLApp
@@ -331,3 +341,5 @@ struct TLAppSettingsView: View {
         }.value
     }
 }
+#endif
+
