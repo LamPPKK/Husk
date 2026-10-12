@@ -197,15 +197,17 @@ struct DirectoryView: View {
         loading = true
         let where_ = path
         Task.detached {
-            var rows: [AndroidHost.GuestEntry] = []
+            var fetchedRows: [AndroidHost.GuestEntry] = []
             var why: String?
-            do { rows = try AndroidHost.shared.list(where_) }
+            do { fetchedRows = try AndroidHost.shared.list(where_) }
             catch { why = error.localizedDescription }
             let s = AndroidHost.shared.freeSpace(at: where_)
+            let finalRows = fetchedRows
+            let finalWhy = why
             await MainActor.run {
-                entries = rows
+                entries = finalRows
                 space = s
-                failure = rows.isEmpty ? why : nil
+                failure = finalRows.isEmpty ? finalWhy : nil
                 loading = false
             }
         }

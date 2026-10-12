@@ -174,7 +174,6 @@ extension GoogleLoginWebView {
                 guard let self = self, !self.captured else { return }
 
                 var oauthToken: String?
-                var accountEmail: String?
 
                 for cookie in cookies {
                     if cookie.name == "oauth_token", !cookie.value.isEmpty {

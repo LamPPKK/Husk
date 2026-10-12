@@ -211,7 +211,8 @@ extension View {
 
 @MainActor
 final class AndroidHost: ObservableObject {
-    static let shared = AndroidHost()
+    nonisolated static let shared = AndroidHost()
+    nonisolated init() {}
 
     struct Package: Identifiable, Hashable, Codable {
         var id: String { name }
@@ -465,6 +466,9 @@ struct TLAttemptView: View {
         .onAppear {
             TranslationLayerStore.shared.markPlayed(app)
             GameWindowController.shared.launchGame(app)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                dismiss()
+            }
         }
     }
 }

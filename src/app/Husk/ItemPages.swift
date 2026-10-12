@@ -120,7 +120,11 @@ struct GamePage: View {
 
     private var subtitle: String {
         if let used = LibraryItem.game(app).usedText { return used }
+        #if os(iOS)
         return runs ? "Ready to play" : "May not run on this iPhone"
+        #else
+        return runs ? "Ready to play" : "May not run on this Mac"
+        #endif
     }
 
     private var lastPlayedText: String {

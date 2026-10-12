@@ -195,7 +195,7 @@ final class SourceManager: ObservableObject {
                 }
             }
         }
-        task.progress.observe(\.fractionCompleted) { progress, _ in
+        _ = task.progress.observe(\.fractionCompleted) { progress, _ in
             Task { @MainActor in self.downloadProgress[app.bundleIdentifier] = progress.fractionCompleted }
         }
         task.resume()

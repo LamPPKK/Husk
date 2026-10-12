@@ -141,7 +141,11 @@ final class CompatibilityStore: ObservableObject {
         var info = utsname()
         uname(&info)
         let machine = withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        #if os(iOS)
         return machine.isEmpty ? UIDevice.current.model : machine
+        #else
+        return machine.isEmpty ? "Mac" : machine
+        #endif
     }
     static var jitMethod: String {
         switch JITCoordinator.shared.resolvedMethod {
@@ -299,7 +303,11 @@ struct CompatReportSheet: View {
                 } header: {
                     Text("Your Name")
                 } footer: {
+                    #if os(iOS)
                     Text("Sent with it: \(CompatibilityStore.device), iOS \(UIDevice.current.systemVersion), Husk build \(CompatibilityStore.build), JIT from \(CompatibilityStore.jitMethod). It shows on antiweb.lol for everyone.")
+                    #else
+                    Text("Sent with it: \(CompatibilityStore.device), macOS \(UIDevice.current.systemVersion), Husk build \(CompatibilityStore.build), JIT from \(CompatibilityStore.jitMethod). It shows on antiweb.lol for everyone.")
+                    #endif
                 }
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }

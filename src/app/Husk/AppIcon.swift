@@ -29,20 +29,20 @@ final class IconCache: @unchecked Sendable {
             .timeIntervalSince1970 ?? 0
     }
 
-    private func key(_ path: String, _ pixels: Int) -> NSString {
-        "\(path)|\(pixels)|\(Self.stamp(path))" as NSString
+    private func key(_ path: String, _ pixels: Int) -> String {
+        "\(path)|\(pixels)|\(Self.stamp(path))"
     }
 
     /// Already decoded at this size: drawn at once, with no fade.
-    func cached(_ path: String, pixels: Int) -> UIImage? { cache.object(forKey: key(path, pixels)) }
+    func cached(_ path: String, pixels: Int) -> UIImage? { cache.object(forKey: key(path, pixels) as NSString) }
 
     func load(_ path: String, pixels: Int) async -> UIImage? {
         let k = key(path, pixels)
-        if let hit = cache.object(forKey: k) { return hit }
+        if let hit = cache.object(forKey: k as NSString) { return hit }
         return await withCheckedContinuation { done in
             queue.async {
                 let image = Self.decode(path, pixels: pixels)
-                if let image { self.cache.setObject(image, forKey: k) }
+                if let image { self.cache.setObject(image, forKey: k as NSString) }
                 done.resume(returning: image)
             }
         }

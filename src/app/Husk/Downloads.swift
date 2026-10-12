@@ -598,7 +598,7 @@ final class DirectDownloadDelegate: NSObject, URLSessionDataDelegate {
             completionHandler(.cancel)
             return
         }
-        try? h.seekToEnd()
+        _ = try? h.seekToEnd()
         t.handle = h
         completionHandler(.allow)
     }
