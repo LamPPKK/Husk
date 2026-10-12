@@ -557,6 +557,8 @@ __attribute__((naked, used)) static void tl_unresolved_entry(void)
         "ldp x29, x30, [sp], #16\n"
         "mov x0, #0\n"
         "ret\n");
+#elif defined(__x86_64__)
+    __asm__ volatile("ret\n");
 #endif
 }
 void tl_unresolved_called_c(const char *name, void *lr);
@@ -652,6 +654,8 @@ __attribute__((naked, used)) void tl_svc_common(void)
         "mov sp, x29\n"
         "ldp x29, x30, [sp], #16\n"
         "ret\n");
+#elif defined(__x86_64__)
+    __asm__ volatile("ret\n");
 #endif
 }
 
@@ -681,6 +685,8 @@ __attribute__((naked, used)) void tl_probe_common(void)
         "mov sp, x29\n"
         "ldp x29, x30, [sp], #16\n"
         "ret\n");
+#elif defined(__x86_64__)
+    __asm__ volatile("ret\n");
 #endif
 }
 

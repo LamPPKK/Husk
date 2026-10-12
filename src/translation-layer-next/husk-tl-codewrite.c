@@ -29,6 +29,7 @@
 #include "husk-tl-bionic.h"
 #include "husk-tl-xmem.h"
 
+#if defined(__arm64__) || defined(__aarch64__)
 static volatile bool g_on;
 static struct sigaction g_prev_bus, g_prev_segv;
 static volatile long g_emulated;
@@ -205,3 +206,8 @@ void tl_codewrite_enable(void)
     g_on = true;
     tl_log_line("codewrite: stores into code go through the writable view from now on");
 }
+#else
+void tl_codewrite_enable(void) {}
+bool tl_codewrite_enabled(void) { return false; }
+long tl_codewrite_count(void) { return 0; }
+#endif

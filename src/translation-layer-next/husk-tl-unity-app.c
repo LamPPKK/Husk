@@ -106,12 +106,20 @@ static void on_fatal(int sig, siginfo_t *info, void *uctx)
     ucontext_t *uc = uctx;
     char tn[40] = "", a[200], b[200], c[200];
     pthread_getname_np(pthread_self(), tn, sizeof(tn));
+#if defined(__arm64__) || defined(__aarch64__)
     where(a, sizeof(a), (uintptr_t)uc->uc_mcontext->__ss.__pc);
     where(b, sizeof(b), (uintptr_t)uc->uc_mcontext->__ss.__lr);
+#elif defined(__x86_64__)
+    where(a, sizeof(a), (uintptr_t)uc->uc_mcontext->__ss.__rip);
+    where(b, sizeof(b), 0);
+#else
+    a[0] = 0; b[0] = 0;
+#endif
     where(c, sizeof(c), (uintptr_t)info->si_addr);
     tl_log_line("=== FATAL signal %d on thread '%s': fault address %p (%s)", sig, tn, info->si_addr, c);
     tl_log_line("    pc %s", a);
     tl_log_line("    lr %s", b);
+#if defined(__arm64__) || defined(__aarch64__)
     uintptr_t fp = uc->uc_mcontext->__ss.__fp;
     for (int i = 0; i < 12 && fp && (fp & 7) == 0 && fp > 0x100000000ull; i++) {
         uintptr_t *f = (uintptr_t *)fp;
@@ -124,6 +132,20 @@ static void on_fatal(int sig, siginfo_t *info, void *uctx)
     for (int i = 0; i < 29; i += 4)
         tl_log_line("    x%d=%#llx x%d=%#llx x%d=%#llx x%d=%#llx", i, uc->uc_mcontext->__ss.__x[i], i + 1, uc->uc_mcontext->__ss.__x[i + 1],
                     i + 2, i + 2 < 29 ? uc->uc_mcontext->__ss.__x[i + 2] : 0ull, i + 3, i + 3 < 29 ? uc->uc_mcontext->__ss.__x[i + 3] : 0ull);
+#elif defined(__x86_64__)
+    uintptr_t fp = uc->uc_mcontext->__ss.__rbp;
+    for (int i = 0; i < 12 && fp && (fp & 7) == 0 && fp > 0x100000000ull; i++) {
+        uintptr_t *f = (uintptr_t *)fp;
+        char w[200];
+        where(w, sizeof(w), f[1]);
+        tl_log_line("    frame %s", w);
+        if (f[0] <= fp) break;
+        fp = f[0];
+    }
+    tl_log_line("    rax=%#llx rbx=%#llx rcx=%#llx rdx=%#llx",
+                uc->uc_mcontext->__ss.__rax, uc->uc_mcontext->__ss.__rbx,
+                uc->uc_mcontext->__ss.__rcx, uc->uc_mcontext->__ss.__rdx);
+#endif
     if (g_prev[sig].sa_flags & SA_SIGINFO) {
         if (g_prev[sig].sa_sigaction) { g_prev[sig].sa_sigaction(sig, info, uctx); return; }
     } else if (g_prev[sig].sa_handler != SIG_DFL && g_prev[sig].sa_handler != SIG_IGN && g_prev[sig].sa_handler) {

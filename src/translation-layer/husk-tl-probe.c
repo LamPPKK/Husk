@@ -103,14 +103,22 @@ static void pause_briefly(unsigned i)
 
 static inline uint64_t tpidr_get(void)
 {
+#if defined(__arm64__) || defined(__aarch64__)
     uint64_t v;
     __asm__ volatile("mrs %0, tpidr_el0" : "=r"(v));
     return v;
+#else
+    return 0;
+#endif
 }
 
 static inline void tpidr_set(uint64_t v)
 {
+#if defined(__arm64__) || defined(__aarch64__)
     __asm__ volatile("msr tpidr_el0, %0" : : "r"(v) : "memory");
+#else
+    (void)v;
+#endif
 }
 
 typedef struct tpidr_run {
@@ -281,6 +289,7 @@ static void check_tpidr(tl_json *j)
  * scratch register, which is why this check is Apple-only.) */
 static uint32_t x18_run(uint32_t rounds, uint64_t *seen)
 {
+#if defined(__arm64__) || defined(__aarch64__)
     const uint64_t canary = 0x4855534B78313821ull;
     uint64_t saved, v;
     uint32_t lost = 0;
@@ -296,6 +305,10 @@ static uint32_t x18_run(uint32_t rounds, uint64_t *seen)
     }
     __asm__ volatile("mov x18, %0" : : "r"(saved));
     return lost;
+#else
+    (void)rounds; (void)seen;
+    return 0;
+#endif
 }
 
 static void check_x18(tl_json *j)

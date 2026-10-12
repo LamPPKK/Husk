@@ -712,6 +712,8 @@ __attribute__((naked, used)) static void glt_common(void)
         "add sp, sp, #176\n"
         "ldp x29, x30, [sp], #16\n"
         "br x17\n");
+#elif defined(__x86_64__)
+    __asm__ volatile("ret\n");
 #endif
 }
 

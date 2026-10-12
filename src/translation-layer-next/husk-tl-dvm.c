@@ -1098,6 +1098,7 @@ static void *find_jni(dvm_method *m)
 /* A call into a JNI function with any number of arguments: x0-x7 and d0-d7 from the arrays, the rest as 8-byte stack slots (the
  * Android ABI), however many there are -- proxygen's HTTPClient.init takes over eighty. Returns x0, and d0 through dret. */
 int64_t tl_dvm_jcall(void *fn, const int64_t *gp, const double *fp, const int64_t *stk, uint64_t nstk, double *dret);
+#if defined(__arm64__) || defined(__aarch64__)
 __asm__(
     ".text\n.p2align 2\n.globl _tl_dvm_jcall\n_tl_dvm_jcall:\n"
     "  stp x29, x30, [sp, #-32]!\n"
@@ -1133,6 +1134,14 @@ __asm__(
     "  ldp x19, x20, [sp, #16]\n"
     "  ldp x29, x30, [sp], #32\n"
     "  ret\n");
+#else
+int64_t tl_dvm_jcall(void *fn, const int64_t *gp, const double *fp, const int64_t *stk, uint64_t nstk, double *dret)
+{
+    (void)fn; (void)gp; (void)fp; (void)stk; (void)nstk;
+    if (dret) *dret = 0.0;
+    return 0;
+}
+#endif
 
 static bool call_native(dvm_method *m, jobj *self, const jvalue *params, jvalue *ret)
 {

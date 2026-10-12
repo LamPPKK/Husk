@@ -82,11 +82,16 @@ static inline double tl_va_arg_f64(tl_va_list *ap)
  * guest unchanged. Declare the entry in C as `extern void sym(void);` and take
  * its address for the symbol table.
  */
+#if defined(__arm64__) || defined(__aarch64__)
 #define TL_VA_STUB(sym, impl) \
     __asm__(".text\n.p2align 2\n.globl _" #sym "\n_" #sym ":\n" \
             "  adrp x16, _" #impl "@PAGE\n" \
             "  add  x16, x16, _" #impl "@PAGEOFF\n" \
             "  b    _tl_va_common\n")
+#else
+#define TL_VA_STUB(sym, impl) \
+    void sym(void) { }
+#endif
 
 void tl_va_common(void);
 
