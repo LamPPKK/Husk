@@ -145,7 +145,11 @@ struct GamePage: View {
         .listStyle(.inset)
         #endif
         .navigationTitle(app.label)
+        #if os(iOS)
         .fullScreenCover(isPresented: $playing, onDismiss: askHowItRan) { TLAttemptView(app: app) }
+        #else
+        .sheet(isPresented: $playing, onDismiss: askHowItRan) { TLAttemptView(app: app) }
+        #endif
         .sheet(item: $reporting) { CompatReportSheet(subject: $0) }
         .sheet(item: Binding(get: { backupFile.map(IdentifiedURL.init) }, set: { backupFile = $0?.url })) { f in
             ShareSheet(items: [f.url])

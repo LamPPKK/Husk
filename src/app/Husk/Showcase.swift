@@ -161,6 +161,7 @@ struct ShowcaseGallery: View {
                 }
             }
             .scrollIndicators(.hidden)
+#if os(iOS)
             .fullScreenCover(item: Binding(get: { shown.map(ShownPicture.init) }, set: { shown = $0?.path })) { picture in
                 ZStack(alignment: .topTrailing) {
                     Color.black.ignoresSafeArea()
@@ -176,6 +177,23 @@ struct ShowcaseGallery: View {
                     .padding(16)
                 }
             }
+#else
+            .sheet(item: Binding(get: { shown.map(ShownPicture.init) }, set: { shown = $0?.path })) { picture in
+                ZStack(alignment: .topTrailing) {
+                    Color.black.ignoresSafeArea()
+                    PictureView(path: picture.path, pixels: 2400, fill: false)
+                        .ignoresSafeArea()
+                    Button { shown = nil } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.15), in: Circle())
+                    }
+                    .padding(16)
+                }
+            }
+#endif
         }
     }
 

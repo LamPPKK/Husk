@@ -182,22 +182,6 @@ public extension View {
     func keyboardType(_ type: UIKeyboardType) -> some View {
         self
     }
-
-    func fullScreenCover<Item: Identifiable, Content: View>(
-        item: Binding<Item?>,
-        onDismiss: (() -> Void)? = nil,
-        @ViewBuilder content: @escaping (Item) -> Content
-    ) -> some View {
-        self.sheet(item: item, onDismiss: onDismiss, content: content)
-    }
-
-    func fullScreenCover<Content: View>(
-        isPresented: Binding<Bool>,
-        onDismiss: (() -> Void)? = nil,
-        @ViewBuilder content: @escaping () -> Content
-    ) -> some View {
-        self.sheet(isPresented: isPresented, onDismiss: onDismiss, content: content)
-    }
 }
 
 // MARK: - ShareSheet Shim
