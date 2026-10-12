@@ -95,7 +95,7 @@ struct TLTechnicalView: View {
 
             Section {
                 if let log, !log.isEmpty {
-                    ScrollView(.horizontal) {
+                    ScrollView(.horizontal, showsIndicators: true) {
                         Text(log)
                             .font(.system(size: 10, design: .monospaced))
                             .textSelection(.enabled)

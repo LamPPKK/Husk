@@ -148,7 +148,7 @@ struct ShowcaseGallery: View {
     var body: some View {
         let pictures = showcase.pictures(for: package)
         if !pictures.isEmpty {
-            ScrollView(.horizontal) {
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(pictures, id: \.self) { path in
                         Button { shown = path } label: {
