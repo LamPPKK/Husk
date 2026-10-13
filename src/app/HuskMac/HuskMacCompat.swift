@@ -98,7 +98,13 @@ enum HuskLog {
         }
     }
 
-    static var deviceModel: String { "Mac (Apple Silicon)" }
+    static var deviceModel: String {
+        #if arch(x86_64)
+        return "Mac (Intel x86_64)"
+        #else
+        return "Mac (Apple Silicon)"
+        #endif
+    }
 
     static func flushNow() {}
 

@@ -143,6 +143,17 @@ struct SettingsViewMac: View {
             Text("Husk for macOS")
                 .font(.title2.weight(.bold))
 
+            #if arch(x86_64)
+            Text("Version 1.0.0 (Intel x86_64)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Text("Husk executes Android binaries on Intel macOS with a high-performance translation layer, Dalvik virtual machine, Bionic libc shim, and Metal graphics backend.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            #else
             Text("Version 1.0.0 (Native Apple Silicon ARM64)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -152,6 +163,7 @@ struct SettingsViewMac: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+            #endif
 
             Spacer()
 

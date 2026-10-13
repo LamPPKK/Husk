@@ -65,7 +65,12 @@ struct HuskMacApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        HuskLog.start()
+        #if arch(x86_64)
+        HuskLog.log("app", "Husk for macOS initialized on Intel (x86_64).")
+        #else
         HuskLog.log("app", "Husk for macOS initialized on Apple Silicon.")
+        #endif
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

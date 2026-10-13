@@ -45,10 +45,17 @@ typedef struct tl_va_frame {
 static inline void tl_va_start(tl_va_frame *f, int named_gp, int named_fp, tl_va_list *out)
 {
     out->stack = f->stack;
+#if defined(__x86_64__)
+    out->gr_top = &f->gp[6];
+    out->vr_top = &f->fp[8];
+    out->gr_offs = -(6 - named_gp) * 8;
+    out->vr_offs = -(8 - named_fp) * 16;
+#else
     out->gr_top = &f->gp[8];
     out->vr_top = &f->fp[8];
     out->gr_offs = -(8 - named_gp) * 8;
     out->vr_offs = -(8 - named_fp) * 16;
+#endif
 }
 
 static inline uint64_t tl_va_arg_u64(tl_va_list *ap)
@@ -65,12 +72,13 @@ static inline uint64_t tl_va_arg_u64(tl_va_list *ap)
 
 static inline double tl_va_arg_f64(tl_va_list *ap)
 {
-    double d;
     if (ap->vr_offs < 0) {
+        double d;
         d = *(double *)((char *)ap->vr_top + ap->vr_offs);
         ap->vr_offs += 16;
         return d;
     }
+    double d;
     d = *(double *)ap->stack;
     ap->stack = (char *)ap->stack + 8;
     return d;
@@ -78,7 +86,7 @@ static inline double tl_va_arg_f64(tl_va_list *ap)
 
 /*
  * Define `sym` as a variadic entry point that calls `impl(tl_va_frame *)`. `impl`
- * must be a non-static function; whatever it returns (x0 or d0) is returned to the
+ * must be a non-static function; whatever it returns (x0/rax or d0/xmm0) is returned to the
  * guest unchanged. Declare the entry in C as `extern void sym(void);` and take
  * its address for the symbol table.
  */
@@ -88,6 +96,11 @@ static inline double tl_va_arg_f64(tl_va_list *ap)
             "  adrp x16, _" #impl "@PAGE\n" \
             "  add  x16, x16, _" #impl "@PAGEOFF\n" \
             "  b    _tl_va_common\n")
+#elif defined(__x86_64__)
+#define TL_VA_STUB(sym, impl) \
+    __asm__(".text\n.p2align 4\n.globl _" #sym "\n_" #sym ":\n" \
+            "  leaq _" #impl "(%rip), %r11\n" \
+            "  jmp _tl_va_common\n")
 #else
 #define TL_VA_STUB(sym, impl) \
     void sym(void) { }

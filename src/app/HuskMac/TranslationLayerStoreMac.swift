@@ -95,9 +95,21 @@ public struct TLReport: Decodable {
         }
     }
 
+    public var preferredAbi: String {
+        #if arch(x86_64)
+        return abis.contains("x86_64") ? "x86_64" : (abis.contains("arm64-v8a") ? "arm64-v8a" : (abis.first ?? "x86_64"))
+        #else
+        return "arm64-v8a"
+        #endif
+    }
+
     public var nativeEngine: TLNativeEngine? {
         guard ok else { return nil }
+        #if arch(x86_64)
+        if !abis.isEmpty && !abis.contains("x86_64") && !abis.contains("arm64-v8a") { return nil }
+        #else
         if !abis.isEmpty && !abis.contains("arm64-v8a") { return nil }
+        #endif
         if abis.isEmpty { return dexCount > 0 && webKind == nil ? .java : nil }
         if engine == "Unity 6" { return .java }
         if engine?.hasPrefix("Unity") == true { return .unity }
@@ -134,13 +146,15 @@ public struct TLReport: Decodable {
 
     public var displaySummary: String {
         guard runsOnNativeRuntime else { return summary }
-        let flagged = libraries.filter { $0.abi == "arm64-v8a" && $0.status != "ok" }.count
-        let total = libraries.filter { $0.abi == "arm64-v8a" }.count
+        let abi = preferredAbi
+        let flagged = libraries.filter { $0.abi == abi && $0.status != "ok" }.count
+        let total = libraries.filter { $0.abi == abi }.count
+        let abiLabel = abi == "x86_64" ? "x86_64" : "arm64"
         var text = nativeEngine == .flutter
-            ? "A Flutter app. Its engine and its compiled Dart run natively through Husk's translation layer, which loads its \(total) arm64 libraries itself."
+            ? "A Flutter app. Its engine and its compiled Dart run natively through Husk's translation layer, which loads its \(total) \(abiLabel) libraries itself."
             : nativeEngine == .java && engine != "libGDX"
-            ? "An Android app. Husk runs its code on its own Java runtime" + (total > 0 ? " and loads its \(total) arm64 libraries itself." : ".")
-            : "A \(nativeEngineName) game. It runs through Husk's native runtime, which loads its \(total) arm64 libraries itself."
+            ? "An Android app. Husk runs its code on its own Java runtime" + (total > 0 ? " and loads its \(total) \(abiLabel) libraries itself." : ".")
+            : "A \(nativeEngineName) game. It runs through Husk's native runtime, which loads its \(total) \(abiLabel) libraries itself."
         if nativeEngine == .cocos || nativeEngine == .minecraft || nativeEngine == .ue4 || nativeEngine == .gta { text += " It is a landscape game: Husk turns the screen for it." }
         else if nativeEngine == .sdl || nativeEngine == .nativeactivity || nativeEngine == .godot || nativeEngine == .gamemaker { text += " Husk turns the screen the way the game asks for." }
         if flagged > 0 {
@@ -278,8 +292,12 @@ public final class TranslationLayerStore: ObservableObject {
         guard !checking else { return }
         checking = true
         Task.detached(priority: .userInitiated) {
-            HuskLog.log("tl", "Running device checks on macOS...")
-            // On Apple Silicon Mac, JIT execution is tested directly
+            #if arch(x86_64)
+            HuskLog.log("tl", "Running device checks on macOS (x86_64)...")
+            #else
+            HuskLog.log("tl", "Running device checks on macOS (Apple Silicon)...")
+            #endif
+            // On macOS, JIT execution is tested directly
             let raw = husk_tl_run_checks(true)
             let json = raw.map { String(cString: $0) } ?? "[]"
             husk_tl_free(raw)

@@ -558,7 +558,15 @@ __attribute__((naked, used)) static void tl_unresolved_entry(void)
         "mov x0, #0\n"
         "ret\n");
 #elif defined(__x86_64__)
-    __asm__ volatile("ret\n");
+    __asm__ volatile(
+        "pushq %rbp\n"
+        "movq %rsp, %rbp\n"
+        "movq %r11, %rdi\n"
+        "movq 8(%rbp), %rsi\n"
+        "callq _tl_unresolved_called_c\n"
+        "xorq %rax, %rax\n"
+        "popq %rbp\n"
+        "retq\n");
 #endif
 }
 void tl_unresolved_called_c(const char *name, void *lr);
@@ -574,6 +582,7 @@ static void *make_stub(const char *name)
         g_stub_left = PAGE;
     }
     uint8_t *rw = g_stub_rw, *rx = g_stub_rx;
+#if defined(__aarch64__)
     uint32_t code[4] = {
         0x58000090u,        /* ldr x16, #16  (the entry) */
         0x580000B1u,        /* ldr x17, #20  (the name)  */
@@ -584,6 +593,18 @@ static void *make_stub(const char *name)
     uint64_t entry = (uint64_t)(uintptr_t)tl_unresolved_entry, nm = (uint64_t)(uintptr_t)name;
     memcpy(rw + 16, &entry, 8);
     memcpy(rw + 24, &nm, 8);
+#elif defined(__x86_64__)
+    uint8_t code[32];
+    memset(code, 0x90, 32);
+    code[0] = 0x49; code[1] = 0xbb; /* movabsq $name, %r11 */
+    uint64_t nm = (uint64_t)(uintptr_t)name;
+    memcpy(code + 2, &nm, 8);
+    code[10] = 0x48; code[11] = 0xb8; /* movabsq $entry, %rax */
+    uint64_t entry = (uint64_t)(uintptr_t)tl_unresolved_entry;
+    memcpy(code + 12, &entry, 8);
+    code[20] = 0xff; code[21] = 0xe0; /* jmpq *%rax */
+    memcpy(rw, code, 32);
+#endif
     tl_xmem_flush(rx, 32);
     g_stub_rx += 32; g_stub_rw += 32; g_stub_left -= 32;
     return rx;

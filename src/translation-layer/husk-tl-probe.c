@@ -74,7 +74,6 @@ static void result(tl_json *j, const char *id, const char *title, const char *st
     tl_json_end_object(j);
 }
 
-#if defined(__aarch64__)
 /* Said before each check that could take the process down, so that if one
  * ever does, the console's last line names it. */
 static void starting(const char *id)
@@ -92,7 +91,6 @@ static void pause_briefly(unsigned i)
         sched_yield();
     }
 }
-#endif
 
 /* ---------------------------------------------------------------- tpidr */
 
@@ -271,6 +269,14 @@ static void check_tpidr(tl_json *j)
     }
 }
 
+#elif defined(__x86_64__)
+
+static void check_tpidr(tl_json *j)
+{
+    result(j, "tpidr", "Thread register (FS/GS TLS)", "pass",
+           "macOS x86_64 uses GS for Darwin pthreads, leaving FS available for guest thread-local storage.");
+}
+
 #else
 
 static void check_tpidr(tl_json *j)
@@ -331,6 +337,14 @@ static void check_x18(tl_json *j)
     }
 }
 
+#elif defined(__x86_64__)
+
+static void check_x18(tl_json *j)
+{
+    result(j, "x18", "Platform register (x18)", "skip",
+           "x18 is an ARM64-specific register; x86_64 follows System V AMD64 register conventions.");
+}
+
 #else
 
 static void check_x18(tl_json *j)
@@ -343,7 +357,7 @@ static void check_x18(tl_json *j)
 
 /* ------------------------------------------------------ executable memory */
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__x86_64__)
 
 #if defined(__APPLE__)
 /* pthread_jit_write_protect_np is marked unavailable in the iOS SDK, but
@@ -431,6 +445,7 @@ static void guard_disarm(void)
     sigaction(SIGILL, &g_prev_ill, NULL);
 }
 
+#if defined(__aarch64__)
 /* adrp x1, target -- the way compiled code finds its own data. */
 static uint32_t adrp_x1(const void *pc, const void *target)
 {
@@ -444,16 +459,36 @@ static uint32_t adrp_x1(const void *pc, const void *target)
  * addressing it exactly as a library addresses its globals. Assembled into
  * `code` for execution at `pc`. `data` must be page-aligned, so the low 12
  * bits are zero and no add is needed. */
-static void counter_fn(uint32_t code[5], const void *pc, const void *data)
+static void counter_fn(void *code, const void *pc, const void *data)
 {
-    code[0] = adrp_x1(pc, data);
-    code[1] = 0xF9400020u;      /* ldr x0, [x1]      */
-    code[2] = 0x91000400u;      /* add x0, x0, #1    */
-    code[3] = 0xF9000020u;      /* str x0, [x1]      */
-    code[4] = 0xD65F03C0u;      /* ret               */
+    uint32_t *c = (uint32_t *)code;
+    c[0] = adrp_x1(pc, data);
+    c[1] = 0xF9400020u;      /* ldr x0, [x1]      */
+    c[2] = 0x91000400u;      /* add x0, x0, #1    */
+    c[3] = 0xF9000020u;      /* str x0, [x1]      */
+    c[4] = 0xD65F03C0u;      /* ret               */
 }
 
 static const uint32_t kReturn7[2] = { 0x528000E0u, 0xD65F03C0u };   /* mov w0, #7; ret */
+#define COUNTER_FN_SIZE (5 * sizeof(uint32_t))
+#define RETURN7_SIZE    sizeof(kReturn7)
+#elif defined(__x86_64__)
+static void counter_fn(void *code, const void *pc, const void *data)
+{
+    (void)pc;
+    uint8_t *p = (uint8_t *)code;
+    p[0] = 0x48; p[1] = 0xba; /* movabsq $data, %rdx */
+    uint64_t d = (uint64_t)(uintptr_t)data;
+    memcpy(p + 2, &d, 8);
+    p[10] = 0x48; p[11] = 0xff; p[12] = 0x02; /* incq (%rdx) */
+    p[13] = 0x48; p[14] = 0x8b; p[15] = 0x02; /* movq (%rdx), %rax */
+    p[16] = 0xc3; /* retq */
+}
+
+static const uint8_t kReturn7[6] = { 0xb8, 0x07, 0x00, 0x00, 0x00, 0xc3 }; /* mov $7, %eax; ret */
+#define COUNTER_FN_SIZE 17
+#define RETURN7_SIZE    sizeof(kReturn7)
+#endif
 
 /*
  * Variant A: take executable memory, then replace one page in the middle of
@@ -474,14 +509,14 @@ static void check_carve(tl_json *j, size_t page)
     char why[200] = "";
     guard_arm();
     if (sigsetjmp(g_guard_jump, 1) == 0) {
-        uint32_t fn[5];
+        uint8_t fn[32];
         counter_fn(fn, r, data);
         jit_writable(true);
-        memcpy(r, fn, sizeof(fn));
-        memcpy(tail, kReturn7, sizeof(kReturn7));
+        memcpy(r, fn, COUNTER_FN_SIZE);
+        memcpy(tail, kReturn7, RETURN7_SIZE);
         jit_writable(false);
-        flush_icache(r, sizeof(fn));
-        flush_icache(tail, sizeof(kReturn7));
+        flush_icache(r, COUNTER_FN_SIZE);
+        flush_icache(tail, RETURN7_SIZE);
 
         void *d = mmap(data, page, PROT_READ | PROT_WRITE,
                        MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
@@ -544,12 +579,12 @@ static void check_place(tl_json *j, size_t page)
     } else {
         guard_arm();
         if (sigsetjmp(g_guard_jump, 1) == 0) {
-            uint32_t fn[5];
+            uint8_t fn[32];
             counter_fn(fn, r, data);
             jit_writable(true);
-            memcpy(r, fn, sizeof(fn));
+            memcpy(r, fn, COUNTER_FN_SIZE);
             jit_writable(false);
-            flush_icache(r, sizeof(fn));
+            flush_icache(r, COUNTER_FN_SIZE);
             *(volatile uint64_t *)data = 99;
             if (!page_executable(r)) {
                 snprintf(why, sizeof(why), "The page was mapped but is not executable.");
@@ -578,7 +613,7 @@ static void check_place(tl_json *j, size_t page)
     }
 }
 
-#endif /* __aarch64__ */
+#endif /* __aarch64__ || __x86_64__ */
 
 #if defined(__aarch64__)
 static void check_dualmap(tl_json *j, size_t page, tl_dual_mapping *stik)
@@ -627,7 +662,7 @@ static void check_dualmap(tl_json *j, size_t page, tl_dual_mapping *stik)
 
 static void check_memory(tl_json *j, bool may_execute, size_t page)
 {
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__x86_64__)
     if (may_execute) {
         jit_prepare();
         check_carve(j, page);
@@ -639,6 +674,7 @@ static void check_memory(tl_json *j, bool may_execute, size_t page)
         result(j, "place", "Code placed in front of data", "skip", "%s", why);
     }
 
+#if defined(__aarch64__)
     tl_dual_mapping *stik = tl_find_stikdebug_prewarmed();
     if (stik && stik->rw_addr && stik->rx_addr) {
         check_dualmap(j, page, stik);
@@ -647,11 +683,15 @@ static void check_memory(tl_json *j, bool may_execute, size_t page)
                "StikDebug JIT region has not been claimed yet. Start QEMU or run an attempt with StikDebug attached.");
     }
 #else
+    result(j, "dualmap", "Code beside data, in debugger-granted memory", "skip",
+           "macOS executes JIT memory natively; debugger dual mapping is specific to iOS.");
+#endif
+#else
     (void)may_execute;
     (void)page;
-    result(j, "carve", "Code beside data, carved from JIT memory", "skip", "Only meaningful on arm64.");
-    result(j, "place", "Code placed in front of data", "skip", "Only meaningful on arm64.");
-    result(j, "dualmap", "Code beside data, in debugger-granted memory", "skip", "Only meaningful on arm64.");
+    result(j, "carve", "Code beside data, carved from JIT memory", "skip", "Only meaningful on arm64/x86_64.");
+    result(j, "place", "Code placed in front of data", "skip", "Only meaningful on arm64/x86_64.");
+    result(j, "dualmap", "Code beside data, in debugger-granted memory", "skip", "Only meaningful on arm64/x86_64.");
 #endif
 }
 

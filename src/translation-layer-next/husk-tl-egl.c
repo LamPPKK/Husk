@@ -728,6 +728,7 @@ static void *glt_wrap(const char *name, void *real)
     for (int i = 0; i < n; i++) if (!strcmp(cache[i].name, name)) { void *t = cache[i].thunk; pthread_mutex_unlock(&mu); return t; }
     void *thunk = real;
     char err[120];
+#if defined(__aarch64__)
     if (n < 4096 && tl_xmem_open(768u << 20, err, sizeof(err))) {
         if (used == 256) { used = 0; if (!tl_xmem_alloc(TL_XMEM_PAGE, &page_rx, &page_rw)) page_rx = page_rw = NULL; }
         if (page_rx) {
@@ -742,6 +743,7 @@ static void *glt_wrap(const char *name, void *real)
             thunk = trx;
         }
     }
+#endif
     cache[n].name = strdup(name); cache[n].thunk = thunk; n++;
     pthread_mutex_unlock(&mu);
     return thunk;

@@ -259,7 +259,13 @@ struct CompatibilitySection: View {
         } header: {
             Text("Compatibility")
         } footer: {
-            if entry?.official != nil { Text("Tested by the Husk team on an iPhone.") }
+            if entry?.official != nil {
+                #if os(macOS)
+                Text("Tested by the Husk team.")
+                #else
+                Text("Tested by the Husk team on an iPhone.")
+                #endif
+            }
         }
     }
 }

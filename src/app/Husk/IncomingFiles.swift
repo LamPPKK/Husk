@@ -135,8 +135,12 @@ struct IncomingChooser: View {
                 Text(title).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
             }
 
-            choice(icon: "bolt.fill", title: "Translation Layer",
-                   detail: "Runs the game directly on your iPhone, without starting Android. Best for games.") {
+            #if os(macOS)
+            let tlDetail = "Runs the game directly on your Mac, without starting Android. Best for games."
+            #else
+            let tlDetail = "Runs the game directly on your iPhone, without starting Android. Best for games."
+            #endif
+            choice(icon: "bolt.fill", title: "Translation Layer", detail: tlDetail) {
                 incoming.sendToTranslationLayer()
             }
             choice(icon: "apps.iphone", title: "Android",

@@ -12,9 +12,15 @@ struct DeviceChecksViewMac: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Translation Layer Diagnostics")
                         .font(.title2.weight(.bold))
+                    #if arch(x86_64)
+                    Text("Verify system readiness for JIT execution and Android code translation on macOS (x86_64).")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    #else
                     Text("Verify system readiness for native ARM64 Android code translation on macOS.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                    #endif
                 }
 
                 Spacer()
@@ -44,7 +50,7 @@ struct DeviceChecksViewMac: View {
                         .foregroundColor(.secondary)
                     Text("Diagnostics Ready")
                         .font(.headline)
-                    Text("Click 'Run Diagnostics' to test ARM64 JIT execution, Bionic shims, ANGLE graphics, and AudioToolbox output.")
+                    Text("Click 'Run Diagnostics' to test JIT memory execution, Bionic shims, ANGLE graphics, and AudioToolbox output.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)

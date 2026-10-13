@@ -1134,6 +1134,66 @@ __asm__(
     "  ldp x19, x20, [sp, #16]\n"
     "  ldp x29, x30, [sp], #32\n"
     "  ret\n");
+#elif defined(__x86_64__)
+__asm__(
+    ".text\n.p2align 4\n.globl _tl_dvm_jcall\n_tl_dvm_jcall:\n"
+    "  pushq %rbp\n"
+    "  movq %rsp, %rbp\n"
+    "  pushq %r12\n"
+    "  pushq %r13\n"
+    "  pushq %r14\n"
+    "  pushq %r15\n"
+    "  pushq %rbx\n"
+    "  subq $8, %rsp\n"
+    "  movq %rdi, %r12\n"         /* r12 = fn */
+    "  movq %r9, %r13\n"          /* r13 = dret */
+    "  movq %rsi, %r14\n"         /* r14 = gp */
+    "  movq %rdx, %r15\n"         /* r15 = fp */
+    "  movq %r8, %rax\n"          /* rax = nstk */
+    "  testq %rax, %rax\n"
+    "  jz 2f\n"
+    "  movq %rax, %rbx\n"
+    "  shlq $3, %rbx\n"
+    "  addq $15, %rbx\n"
+    "  andq $-16, %rbx\n"
+    "  subq %rbx, %rsp\n"
+    "  xorq %rdx, %rdx\n"
+    "1:\n"
+    "  cmpq %rdx, %rax\n"
+    "  jbe 2f\n"
+    "  movq (%rcx, %rdx, 8), %rbx\n"
+    "  movq %rbx, (%rsp, %rdx, 8)\n"
+    "  incq %rdx\n"
+    "  jmp 1b\n"
+    "2:\n"
+    "  movsd 0(%r15), %xmm0\n"
+    "  movsd 8(%r15), %xmm1\n"
+    "  movsd 16(%r15), %xmm2\n"
+    "  movsd 24(%r15), %xmm3\n"
+    "  movsd 32(%r15), %xmm4\n"
+    "  movsd 40(%r15), %xmm5\n"
+    "  movsd 48(%r15), %xmm6\n"
+    "  movsd 56(%r15), %xmm7\n"
+    "  movq 0(%r14), %rdi\n"
+    "  movq 8(%r14), %rsi\n"
+    "  movq 16(%r14), %rdx\n"
+    "  movq 24(%r14), %rcx\n"
+    "  movq 32(%r14), %r8\n"
+    "  movq 40(%r14), %r9\n"
+    "  movb $8, %al\n"
+    "  callq *%r12\n"
+    "  testq %r13, %r13\n"
+    "  jz 3f\n"
+    "  movsd %xmm0, (%r13)\n"
+    "3:\n"
+    "  leaq -40(%rbp), %rsp\n"
+    "  popq %rbx\n"
+    "  popq %r15\n"
+    "  popq %r14\n"
+    "  popq %r13\n"
+    "  popq %r12\n"
+    "  popq %rbp\n"
+    "  retq\n");
 #else
 int64_t tl_dvm_jcall(void *fn, const int64_t *gp, const double *fp, const int64_t *stk, uint64_t nstk, double *dret)
 {
@@ -1152,6 +1212,11 @@ static bool call_native(dvm_method *m, jobj *self, const jvalue *params, jvalue 
     int64_t gp[8]; double fp[8]; int64_t stk[256];
     int ng = 0, nf = 0, ns = 0;
     memset(gp, 0, sizeof(gp)); memset(fp, 0, sizeof(fp));
+#if defined(__x86_64__)
+    const int max_gp = 6;
+#else
+    const int max_gp = 8;
+#endif
     /* @CriticalNative: a static method called with its arguments alone, no JNIEnv and no class (protobuf's upb, Google's libraries) */
     if (m->critical == 0) { bool dvm_method_annotated_build(dvm_method *, const char *); m->critical = (m->flags & 8) && dvm_method_annotated_build(m, "Ldalvik/annotation/optimization/CriticalNative;") ? 1 : -1; }
     if (m->critical < 0) {
@@ -1171,7 +1236,7 @@ static bool call_native(dvm_method *m, jobj *self, const jvalue *params, jvalue 
             case 'S': v = params[i].s; break; case 'I': v = params[i].i; break; case 'J': v = params[i].j; break;
             default: v = (int64_t)(uintptr_t)params[i].l; break;
             }
-            if (ng < 8) gp[ng++] = v; else if (ns < 256) stk[ns++] = v;
+            if (ng < max_gp) gp[ng++] = v; else if (ns < 256) stk[ns++] = v;
         }
     }
     char rk = m->shorty[0];

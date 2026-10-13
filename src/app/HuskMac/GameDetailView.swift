@@ -285,9 +285,15 @@ struct GameDetailView: View {
                     .cornerRadius(6)
                 }
             } else {
+                #if arch(x86_64)
+                Text("No native 64-bit libraries found in this APK.")
+                    .foregroundColor(.secondary)
+                    .padding()
+                #else
                 Text("No native ARM64 libraries found in this APK.")
                     .foregroundColor(.secondary)
                     .padding()
+                #endif
             }
         }
     }
