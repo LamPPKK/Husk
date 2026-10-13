@@ -47,11 +47,20 @@ static int safe_read(uintptr_t addr, void *out, size_t n)
 static void on_crash(int sig, siginfo_t *info, void *uctx)
 {
     ucontext_t *uc = uctx;
+#if defined(__arm64__) || defined(__aarch64__)
     _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     fprintf(stderr, "\n=== CRASH: signal %d, fault address %p ===\n", sig, info->si_addr);
     describe("pc", (void *)ss->__pc);
     describe("lr", (void *)ss->__lr);
     uintptr_t fp = ss->__fp;
+#elif defined(__x86_64__)
+    _STRUCT_X86_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
+    fprintf(stderr, "\n=== CRASH: signal %d, fault address %p ===\n", sig, info->si_addr);
+    describe("rip", (void *)ss->__rip);
+    uintptr_t fp = ss->__rbp;
+#else
+    uintptr_t fp = 0;
+#endif
     for (int i = 0; i < 24 && fp && (fp & 7) == 0; i++) {
         uint64_t fr[2];
         if (!safe_read(fp, fr, sizeof(fr))) break;

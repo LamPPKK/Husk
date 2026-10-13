@@ -38,8 +38,10 @@ enum {
     DT_ANDROID_RELR_ = 0x6fffe000, DT_ANDROID_RELRSZ_ = 0x6fffe001,
     R_NONE = 0, R_ABS64 = 257, R_GLOB_DAT = 1025, R_JUMP_SLOT = 1026, R_RELATIVE = 1027,
     R_TLS_DTPMOD = 1028, R_TLS_DTPREL = 1029, R_TLS_TPREL = 1030, R_TLSDESC = 1031, R_IRELATIVE = 1032,
+    R_X86_64_NONE = 0, R_X86_64_64 = 1, R_X86_64_GLOB_DAT = 6, R_X86_64_JUMP_SLOT = 7, R_X86_64_RELATIVE = 8,
+    R_X86_64_DTPMOD64 = 16, R_X86_64_DTPOFF64 = 17, R_X86_64_TPOFF64 = 18, R_X86_64_TLSDESC = 36, R_X86_64_IRELATIVE = 37,
     STB_WEAK_ = 2, STT_TLS_ = 6, STT_GNU_IFUNC_ = 10, SHN_UNDEF_ = 0,
-    PF_X_ = 1, PF_W_ = 2, PF_R_ = 4, EM_AARCH64_ = 183,
+    PF_X_ = 1, PF_W_ = 2, PF_R_ = 4, EM_AARCH64_ = 183, EM_X86_64_ = 62,
 };
 
 #define PAGE TL_XMEM_PAGE
@@ -1330,24 +1332,28 @@ static bool reloc_one(tl_lib *L, uint64_t r_offset, uint32_t type, uint32_t symi
     switch (type) {
     case R_NONE:
         return true;
-    case R_RELATIVE:
+    case R_RELATIVE: case R_X86_64_RELATIVE:
         *place = image_addr(L, (uint64_t)addend);
         return true;
-    case R_ABS64: case R_GLOB_DAT: case R_JUMP_SLOT: {
+    case R_ABS64: case R_X86_64_64:
+    case R_GLOB_DAT: case R_X86_64_GLOB_DAT:
+    case R_JUMP_SLOT: case R_X86_64_JUMP_SLOT: {
         if (symidx == 0) { *place = image_addr(L, (uint64_t)addend); return true; }
         uint64_t v = bind_symbol(L, symidx, &failed);
         if (failed) return false;
         if (v == 1 && L->symcache) v = 0;
-        *place = v + (type == R_ABS64 ? (uint64_t)addend : 0);
+        *place = v + (type == R_ABS64 || type == R_X86_64_64 ? (uint64_t)addend : 0);
         return true;
     }
-    case R_IRELATIVE: {
+    case R_IRELATIVE: case R_X86_64_IRELATIVE: {
         /* The resolver is guest code: run it, store what it returns. */
         uint64_t (*resolver)(void) = (uint64_t (*)(void))(uintptr_t)(L->rx + ((uint64_t)addend - L->base_vaddr));
         *place = resolver();
         return true;
     }
-    case R_TLSDESC: case R_TLS_DTPMOD: case R_TLS_DTPREL: {
+    case R_TLSDESC: case R_X86_64_TLSDESC:
+    case R_TLS_DTPMOD: case R_X86_64_DTPMOD64:
+    case R_TLS_DTPREL: case R_X86_64_DTPOFF64: {
         uint64_t symoff = 0;
         if (symidx) {
             const elf_sym *ts = sym_at(L, symidx);
@@ -1355,18 +1361,18 @@ static bool reloc_one(tl_lib *L, uint64_t r_offset, uint32_t type, uint32_t symi
             symoff = ts->st_value;
         }
         if (!L->tls_id) { tl_log_line("ld: %s: a TLS relocation but no TLS segment", L->name); return false; }
-        if (type == R_TLSDESC) {
+        if (type == R_TLSDESC || type == R_X86_64_TLSDESC) {
             if (off + 16 > L->npages * PAGE) return false;
             place[0] = (uint64_t)(uintptr_t)&tl_tlsdesc_entry;
             place[1] = ((uint64_t)L->tls_id << 32) | (uint32_t)(symoff + (uint64_t)addend);
-        } else if (type == R_TLS_DTPMOD) {
+        } else if (type == R_TLS_DTPMOD || type == R_X86_64_DTPMOD64) {
             *place = (uint64_t)L->tls_id;
         } else {
             *place = symoff + (uint64_t)addend;
         }
         return true;
     }
-    case R_TLS_TPREL:
+    case R_TLS_TPREL: case R_X86_64_TPOFF64:
         tl_log_line("ld: %s: an initial-exec TLS relocation (type %u) is not supported", L->name, type);
         return false;
     default:
@@ -1705,10 +1711,17 @@ static tl_lib *map_library(const char *name, uint8_t *file, size_t flen)
     if (G.nlibs >= MAX_LIBS) { tl_log_line("ld: too many libraries"); return NULL; }
     const elf_ehdr *eh = (const elf_ehdr *)file;
     if (flen < sizeof(*eh) || memcmp(file, "\x7f""ELF", 4) != 0 || eh->e_ident[4] != 2 || eh->e_ident[5] != 1
+#if defined(__x86_64__)
+        || (eh->e_machine != EM_X86_64_ && eh->e_machine != EM_AARCH64_)) {
+        tl_log_line("ld: %s is not a 64-bit little-endian ELF image (machine %u)", name, eh->e_machine);
+        return NULL;
+    }
+#else
         || eh->e_machine != EM_AARCH64_) {
         tl_log_line("ld: %s is not a 64-bit little-endian arm64 ELF image", name);
         return NULL;
     }
+#endif
     if (eh->e_phentsize < sizeof(elf_phdr) || eh->e_phoff + (uint64_t)eh->e_phnum * eh->e_phentsize > flen) {
         tl_log_line("ld: %s: program headers run off the file", name);
         return NULL;

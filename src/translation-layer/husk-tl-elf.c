@@ -28,6 +28,7 @@
 #define ELFDATA2LSB     1
 #define ET_DYN          3
 #define EM_AARCH64      183
+#define EM_X86_64       62
 
 #define PT_LOAD         1
 #define PT_DYNAMIC      2
@@ -79,6 +80,18 @@
 #define R_AARCH64_TLS_TPREL64   1030
 #define R_AARCH64_TLSDESC       1031
 #define R_AARCH64_IRELATIVE     1032
+
+/* x86_64 dynamic relocations */
+#define R_X86_64_NONE           0
+#define R_X86_64_64             1
+#define R_X86_64_GLOB_DAT       6
+#define R_X86_64_JUMP_SLOT      7
+#define R_X86_64_RELATIVE       8
+#define R_X86_64_DTPMOD64       16
+#define R_X86_64_DTPOFF64       17
+#define R_X86_64_TPOFF64        18
+#define R_X86_64_TLSDESC        36
+#define R_X86_64_IRELATIVE      37
 
 #define TL_PAGE         16384u
 #define MAX_LOADS       64
@@ -268,6 +281,7 @@ static void summarise_layout(const uint8_t *flags, size_t n, char *out, size_t c
  */
 static void scan_code(const uint8_t *p, uint64_t len, tl_elf_report *r)
 {
+    if (r->machine != EM_AARCH64) return;
     for (uint64_t i = 0; i + 4 <= len; i += 4) {
         uint32_t insn = rd32(p + i);
         if ((insn & 0xFFE0001Fu) == 0xD4000001u) {
@@ -316,6 +330,29 @@ static void scan_all_code(const elf *e, tl_elf_report *r)
 static void count_reloc(tl_elf_report *r, uint32_t type)
 {
     r->relocs++;
+    if (r->machine == EM_X86_64) {
+        switch (type) {
+        case R_X86_64_NONE:
+        case R_X86_64_64:
+        case R_X86_64_GLOB_DAT:
+        case R_X86_64_JUMP_SLOT:
+        case R_X86_64_RELATIVE:
+        case R_X86_64_IRELATIVE:
+            break;
+        case R_X86_64_DTPMOD64:
+        case R_X86_64_DTPOFF64:
+        case R_X86_64_TPOFF64:
+        case R_X86_64_TLSDESC:
+            r->relocs_tls++;
+            break;
+        default:
+            if (r->relocs_unsupported++ == 0) {
+                r->first_unsupported = type;
+            }
+            break;
+        }
+        return;
+    }
     switch (type) {
     case R_AARCH64_NONE:
     case R_AARCH64_ABS64:
@@ -648,11 +685,19 @@ void tl_elf_analyze(const uint8_t *data, size_t size, tl_elf_report *r)
         set_error(r, "big-endian ELF");
         return;
     }
+#if defined(__x86_64__)
+    if (!r->is64 || (r->machine != EM_AARCH64 && r->machine != EM_X86_64)) {
+        set_error(r, "not arm64 or x86_64 code (ELF machine %u, %s)", r->machine,
+                  r->is64 ? "64-bit" : "32-bit");
+        return;
+    }
+#else
     if (!r->is64 || r->machine != EM_AARCH64) {
         set_error(r, "not arm64 code (ELF machine %u, %s)", r->machine,
                   r->is64 ? "64-bit" : "32-bit");
         return;
     }
+#endif
     if (rd16(data + 16) != ET_DYN) {
         set_error(r, "not a shared library");
         return;

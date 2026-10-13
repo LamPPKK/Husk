@@ -44,15 +44,24 @@ static void describe(const char *label, const void *addr)
 static void on_crash(int sig, siginfo_t *info, void *uctx)
 {
     ucontext_t *uc = uctx;
-    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     char nm[32] = ""; pthread_getname_np(pthread_self(), nm, sizeof(nm));
     fprintf(stderr, "\n=== CRASH: signal %d, fault address %p, thread %s ===\n", sig, info->si_addr, nm);
+#if defined(__arm64__) || defined(__aarch64__)
+    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     describe("pc", (void *)ss->__pc);
     describe("lr", (void *)ss->__lr);
     if (info->si_addr) describe("fault", info->si_addr);
     uint64_t *fp = (uint64_t *)ss->__fp;
     for (int i = 0; i < 20 && fp && ((uintptr_t)fp & 7) == 0 && (uintptr_t)fp > 0x100000000ull; i++) { describe("frame", (void *)fp[1]); fp = (uint64_t *)fp[0]; }
     fprintf(stderr, "  x0=%#llx x1=%#llx x2=%#llx x3=%#llx x8=%#llx x19=%#llx x20=%#llx\n", ss->__x[0], ss->__x[1], ss->__x[2], ss->__x[3], ss->__x[8], ss->__x[19], ss->__x[20]);
+#elif defined(__x86_64__)
+    _STRUCT_X86_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
+    describe("rip", (void *)ss->__rip);
+    if (info->si_addr) describe("fault", info->si_addr);
+    uint64_t *fp = (uint64_t *)ss->__rbp;
+    for (int i = 0; i < 20 && fp && ((uintptr_t)fp & 7) == 0 && (uintptr_t)fp > 0x100000000ull; i++) { describe("frame", (void *)fp[1]); fp = (uint64_t *)fp[0]; }
+    fprintf(stderr, "  rax=%#llx rbx=%#llx rcx=%#llx rdx=%#llx rdi=%#llx rsi=%#llx\n", ss->__rax, ss->__rbx, ss->__rcx, ss->__rdx, ss->__rdi, ss->__rsi);
+#endif
     fflush(stderr);
     _exit(139);
 }

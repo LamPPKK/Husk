@@ -70,12 +70,10 @@ static int safe_read(uintptr_t addr, void *out, size_t n)
 static void on_crash(int sig, siginfo_t *info, void *uctx)
 {
     ucontext_t *uc = uctx;
-    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
-    /* one report: a second thread faulting meanwhile (often the same bug) waits for the first to end the process */
-    static atomic_flag reporting = ATOMIC_FLAG_INIT;
-    if (atomic_flag_test_and_set(&reporting)) for (;;) pause();
     char tn[32] = ""; pthread_getname_np(pthread_self(), tn, sizeof(tn));
     fprintf(stderr, "\n=== CRASH: signal %d, fault address %p, thread '%s' ===\n", sig, info->si_addr, tn);
+#if defined(__arm64__) || defined(__aarch64__)
+    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     describe("pc", (void *)ss->__pc);
     describe("lr", (void *)ss->__lr);
     if (info->si_addr) describe("fault", info->si_addr);
@@ -95,6 +93,21 @@ static void on_crash(int sig, siginfo_t *info, void *uctx)
     for (int i = 0; i < 29; i += 4)
         fprintf(stderr, "  x%d=%#llx x%d=%#llx x%d=%#llx x%d=%#llx\n", i, ss->__x[i], i + 1, ss->__x[i + 1], i + 2, i + 2 < 29 ? ss->__x[i + 2] : 0, i + 3, i + 3 < 29 ? ss->__x[i + 3] : 0);
     fprintf(stderr, "  sp=%#llx fp=%#llx\n", ss->__sp, ss->__fp);
+#elif defined(__x86_64__)
+    _STRUCT_X86_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
+    describe("rip", (void *)ss->__rip);
+    if (info->si_addr) describe("fault", info->si_addr);
+    uintptr_t fp = ss->__rbp;
+    for (int i = 0; i < 16 && fp && (fp & 7) == 0; i++) {
+        uint64_t fr[2];
+        if (!safe_read(fp, fr, sizeof(fr))) break;
+        describe("frame", (void *)fr[1]);
+        fp = fr[0];
+    }
+    fprintf(stderr, "  rax=%#llx rbx=%#llx rcx=%#llx rdx=%#llx rdi=%#llx rsi=%#llx\n",
+            ss->__rax, ss->__rbx, ss->__rcx, ss->__rdx, ss->__rdi, ss->__rsi);
+    fprintf(stderr, "  rsp=%#llx rbp=%#llx\n", ss->__rsp, ss->__rbp);
+#endif
     { void tl_dvm_print_stack(FILE *, int); tl_dvm_print_stack(stderr, 24); }
     fflush(stderr);
     _exit(139);

@@ -54,8 +54,9 @@ static void on_dump(int sig, siginfo_t *info, void *uctx)
 {
     (void)sig; (void)info;
     ucontext_t *uc = uctx;
-    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     fprintf(stderr, "\n--- UnityMain, interrupted ---\n");
+#if defined(__arm64__) || defined(__aarch64__)
+    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     describe("pc", (void *)ss->__pc);
     describe("lr", (void *)ss->__lr);
     fprintf(stderr, "  x19=%#llx x20=%#llx x21=%#llx x22=%#llx x23=%#llx x24=%#llx x25=%#llx x26=%#llx\n",
@@ -104,6 +105,18 @@ static void on_dump(int sig, siginfo_t *info, void *uctx)
         uint64_t v = sp[i];
         if (v > 0x7000000000ull && v < 0x7100000000ull && tl_ld_lib_of((void *)v) && tl_xmem_is_rx((void *)v) && (v & 3) == 0) { describe("ret", (void *)v); shown++; }
     }
+#elif defined(__x86_64__)
+    _STRUCT_X86_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
+    describe("rip", (void *)ss->__rip);
+    fprintf(stderr, "  rbx=%#llx r12=%#llx r13=%#llx r14=%#llx r15=%#llx\n",
+            ss->__rbx, ss->__r12, ss->__r13, ss->__r14, ss->__r15);
+    uint64_t *sp = (uint64_t *)ss->__rsp;
+    int shown = 0;
+    for (int i = 0; i < 4096 && shown < 40; i++) {
+        uint64_t v = sp[i];
+        if (v > 0x7000000000ull && v < 0x7100000000ull && tl_ld_lib_of((void *)v) && tl_xmem_is_rx((void *)v) && (v & 3) == 0) { describe("ret", (void *)v); shown++; }
+    }
+#endif
     fflush(stderr);
 }
 
@@ -116,9 +129,10 @@ static int safe_read(uintptr_t addr, void *out, size_t n)
 static void on_crash(int sig, siginfo_t *info, void *uctx)
 {
     ucontext_t *uc = uctx;
-    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     char tn[32] = ""; pthread_getname_np(pthread_self(), tn, sizeof(tn));
     fprintf(stderr, "\n=== CRASH: signal %d, fault address %p, thread '%s' ===\n", sig, info->si_addr, tn);
+#if defined(__arm64__) || defined(__aarch64__)
+    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     describe("pc", (void *)ss->__pc);
     describe("lr", (void *)ss->__lr);
     if (info->si_addr) describe("fault", info->si_addr);
@@ -132,12 +146,21 @@ static void on_crash(int sig, siginfo_t *info, void *uctx)
     for (int i = 0; i < 29; i += 4)
         fprintf(stderr, "  x%d=%#llx x%d=%#llx x%d=%#llx x%d=%#llx\n", i, ss->__x[i], i + 1, ss->__x[i + 1], i + 2, i + 2 < 29 ? ss->__x[i + 2] : 0, i + 3, i + 3 < 29 ? ss->__x[i + 3] : 0);
     fprintf(stderr, "  sp=%#llx fp=%#llx\n", ss->__sp, ss->__fp);
-    uint64_t dump_base = getenv("TL_CRASH_DUMP_REG") ? ss->__x[atoi(getenv("TL_CRASH_DUMP_REG"))] : ss->__x[0];
-    for (int i = 0; i < 0x120; i += 16) {
-        uint64_t q[2];
-        if (!safe_read(dump_base + i, q, sizeof(q))) break;
-        fprintf(stderr, "  [%#llx+%#x] %016llx %016llx\n", (unsigned long long)dump_base, i, (unsigned long long)q[0], (unsigned long long)q[1]);
+#elif defined(__x86_64__)
+    _STRUCT_X86_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
+    describe("rip", (void *)ss->__rip);
+    if (info->si_addr) describe("fault", info->si_addr);
+    uintptr_t fp = ss->__rbp;
+    for (int i = 0; i < 14 && fp && (fp & 7) == 0; i++) {
+        uint64_t fr[2];
+        if (!safe_read(fp, fr, sizeof(fr))) break;
+        describe("frame", (void *)fr[1]);
+        fp = fr[0];
     }
+    fprintf(stderr, "  rax=%#llx rbx=%#llx rcx=%#llx rdx=%#llx rdi=%#llx rsi=%#llx\n",
+            ss->__rax, ss->__rbx, ss->__rcx, ss->__rdx, ss->__rdi, ss->__rsi);
+    fprintf(stderr, "  rsp=%#llx rbp=%#llx\n", ss->__rsp, ss->__rbp);
+#endif
     fflush(stderr);
     _exit(139);
 }

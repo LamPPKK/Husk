@@ -82,7 +82,7 @@ static void starting(const char *id)
 }
 
 /* Long enough, one time in three, to be taken off the CPU. */
-static void pause_briefly(unsigned i)
+static void __attribute__((unused)) pause_briefly(unsigned i)
 {
     if (i % 3 == 0) {
         struct timespec ts = { 0, 200 * 1000 };

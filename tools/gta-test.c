@@ -11,7 +11,7 @@
 #include <dlfcn.h>
 #include <mach/mach.h>
 #include <mach/thread_act.h>
-#include <mach/arm/thread_status.h>
+#include <mach/thread_status.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -71,14 +71,39 @@ static int safe_read(uintptr_t addr, void *out, size_t n)
     return vm_read_overwrite(mach_task_self(), (vm_address_t)addr, n, (vm_address_t)out, &got) == KERN_SUCCESS && got == n;
 }
 
+#if defined(__arm64__) || defined(__aarch64__)
+typedef arm_thread_state64_t host_thread_state_t;
+#define HOST_THREAD_STATE_FLAVOR ARM_THREAD_STATE64
+#define HOST_THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
+static inline uintptr_t host_thread_state_get_pc(host_thread_state_t st) { return arm_thread_state64_get_pc(st); }
+static inline uintptr_t host_thread_state_get_lr(host_thread_state_t st) { return arm_thread_state64_get_lr(st); }
+static inline uintptr_t host_thread_state_get_fp(host_thread_state_t st) { return arm_thread_state64_get_fp(st); }
+#elif defined(__x86_64__)
+typedef x86_thread_state64_t host_thread_state_t;
+#define HOST_THREAD_STATE_FLAVOR x86_THREAD_STATE64
+#define HOST_THREAD_STATE_COUNT x86_THREAD_STATE64_COUNT
+static inline uintptr_t host_thread_state_get_pc(host_thread_state_t st) { return st.__rip; }
+static inline uintptr_t host_thread_state_get_lr(host_thread_state_t st) {
+    uint64_t ret = 0;
+    safe_read(st.__rsp, &ret, 8);
+    return ret;
+}
+static inline uintptr_t host_thread_state_get_fp(host_thread_state_t st) { return st.__rbp; }
+#endif
+
 static void on_crash(int sig, siginfo_t *info, void *uctx)
 {
     ucontext_t *uc = uctx;
-    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     char tn[32] = ""; pthread_getname_np(pthread_self(), tn, sizeof(tn));
     fprintf(stderr, "\n=== CRASH: signal %d, fault address %p, thread '%s' ===\n", sig, info->si_addr, tn);
+#if defined(__arm64__) || defined(__aarch64__)
+    _STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
     describe("pc", (void *)ss->__pc);
     describe("lr", (void *)ss->__lr);
+#elif defined(__x86_64__)
+    _STRUCT_X86_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss;
+    describe("rip", (void *)ss->__rip);
+#endif
     if (info->si_addr) describe("fault", info->si_addr);
     if (info->si_addr) {
         vm_address_t ra = (vm_address_t)info->si_addr; vm_size_t rs = 0; vm_region_basic_info_data_64_t bi; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj;
@@ -86,6 +111,7 @@ static void on_crash(int sig, siginfo_t *info, void *uctx)
         if (kr == KERN_SUCCESS) fprintf(stderr, "  region at/after the fault: [%#lx, %#lx) prot %d max %d%s\n", (unsigned long)ra, (unsigned long)(ra + rs), bi.protection, bi.max_protection, ra > (vm_address_t)info->si_addr ? " (the fault itself is in an unmapped gap before it)" : " (the fault is inside it)");
         else fprintf(stderr, "  no region at or after the fault address\n");
     }
+#if defined(__arm64__) || defined(__aarch64__)
     uintptr_t fp = ss->__fp;
     for (int i = 0; i < 16 && fp && (fp & 7) == 0; i++) {
         uint64_t fr[2];
@@ -102,6 +128,24 @@ static void on_crash(int sig, siginfo_t *info, void *uctx)
     for (int i = 0; i < 29; i += 4)
         fprintf(stderr, "  x%d=%#llx x%d=%#llx x%d=%#llx x%d=%#llx\n", i, ss->__x[i], i + 1, ss->__x[i + 1], i + 2, i + 2 < 29 ? ss->__x[i + 2] : 0, i + 3, i + 3 < 29 ? ss->__x[i + 3] : 0);
     fprintf(stderr, "  sp=%#llx fp=%#llx\n", ss->__sp, ss->__fp);
+#elif defined(__x86_64__)
+    uintptr_t fp = ss->__rbp;
+    for (int i = 0; i < 16 && fp && (fp & 7) == 0; i++) {
+        uint64_t fr[2];
+        if (!safe_read(fp, fr, sizeof(fr))) break;
+        describe("frame", (void *)fr[1]);
+        fp = fr[0];
+    }
+    uint64_t *sp = (uint64_t *)ss->__rsp; int shown = 0;
+    for (int i = 0; i < 8192 && shown < 24; i++) {
+        uint64_t v;
+        if (!safe_read((uintptr_t)(sp + i), &v, 8)) break;
+        if (v > 0x7000000000ull && v < 0x7100000000ull && tl_ld_lib_of((void *)v) && (v & 3) == 0) { describe("stk", (void *)v); shown++; }
+    }
+    fprintf(stderr, "  rax=%#llx rbx=%#llx rcx=%#llx rdx=%#llx rdi=%#llx rsi=%#llx\n",
+            ss->__rax, ss->__rbx, ss->__rcx, ss->__rdx, ss->__rdi, ss->__rsi);
+    fprintf(stderr, "  rsp=%#llx rbp=%#llx\n", ss->__rsp, ss->__rbp);
+#endif
     { char gl[2048]; tl_egl_recent_calls(gl, sizeof(gl), 40); if (gl[0]) fprintf(stderr, "  last GL calls: %s\n", gl); }
     fflush(stderr);
     _exit(139);
@@ -272,7 +316,7 @@ static void throw_probe(uint64_t *r)
     char shown[100]; shown[0] = 0;
     /* libc++'s logic_error/runtime_error keep a pointer to the message just after the vtable */
     if (ex) { const char *const *q = (const char *const *)ex; for (int i = 1; i <= 2; i++) { const char *c = q[i]; if ((uintptr_t)c > 0x100000 && ((uintptr_t)c >> 40) < 0x1000) { size_t k = 0; while (k < 90 && c[k] >= 32 && c[k] < 127) { shown[k] = c[k]; k++; } shown[k] = 0; if (k > 3) { msg = shown; break; } } } }
-    uint64_t lr; __asm__ volatile("mov %0, x30" : "=r"(lr));
+    uint64_t lr = (uint64_t)(uintptr_t)__builtin_return_address(0); (void)lr;
     tl_log_line("C++ THROW: %s %s", tn ? tn : "?", msg);
 }
 
@@ -294,26 +338,26 @@ static void *sampler(void *arg)
         fprintf(stderr, "---- sample: %u threads ----\n", n);
         { char gl[1500]; tl_egl_recent_calls(gl, sizeof(gl), 24); if (gl[0]) fprintf(stderr, "  last GL calls: %s\n", gl); }
         for (mach_msg_type_number_t i = 0; i < n; i++) {
-            arm_thread_state64_t st; mach_msg_type_number_t cnt = ARM_THREAD_STATE64_COUNT;
+            host_thread_state_t st; mach_msg_type_number_t cnt = HOST_THREAD_STATE_COUNT;
             pthread_t pt = pthread_from_mach_thread_np(th[i]);
             char name[40] = "";
             if (pt) pthread_getname_np(pt, name, sizeof(name));
             if (th[i] == mach_thread_self()) continue;
             thread_suspend(th[i]);
-            if (thread_get_state(th[i], ARM_THREAD_STATE64, (thread_state_t)&st, &cnt) == KERN_SUCCESS) {
+            if (thread_get_state(th[i], HOST_THREAD_STATE_FLAVOR, (thread_state_t)&st, &cnt) == KERN_SUCCESS) {
                 const char *lib = NULL; const void *sa = NULL;
-                const char *sym = tl_ld_symbol_at((void *)arm_thread_state64_get_pc(st), &lib, &sa);
+                const char *sym = tl_ld_symbol_at((void *)host_thread_state_get_pc(st), &lib, &sa);
                 const char *lib2 = NULL; const void *sa2 = NULL;
-                const char *sym2 = tl_ld_symbol_at((void *)arm_thread_state64_get_lr(st), &lib2, &sa2);
+                const char *sym2 = tl_ld_symbol_at((void *)host_thread_state_get_lr(st), &lib2, &sa2);
                 Dl_info di; const char *host = "";
-                if (!lib && dladdr((void *)arm_thread_state64_get_pc(st), &di) && di.dli_sname) host = di.dli_sname;
+                if (!lib && dladdr((void *)host_thread_state_get_pc(st), &di) && di.dli_sname) host = di.dli_sname;
                 fprintf(stderr, "  [%-24s] pc %s%s+%#lx  lr %s%s+%#lx\n", name, lib ? lib : "[host] ", lib ? sym ? sym : "?" : host,
-                        lib && sa ? (unsigned long)(arm_thread_state64_get_pc(st) - (uintptr_t)sa) : 0ul,
+                        lib && sa ? (unsigned long)(host_thread_state_get_pc(st) - (uintptr_t)sa) : 0ul,
                         lib2 ? lib2 : "", lib2 ? sym2 ? sym2 : "?" : "",
-                        lib2 && sa2 ? (unsigned long)(arm_thread_state64_get_lr(st) - (uintptr_t)sa2) : 0ul);
+                        lib2 && sa2 ? (unsigned long)(host_thread_state_get_lr(st) - (uintptr_t)sa2) : 0ul);
             }
             if (getenv("TL_SAMPLE_BT") && strstr(name, getenv("TL_SAMPLE_BT"))) {
-                uintptr_t fp = arm_thread_state64_get_fp(st);
+                uintptr_t fp = host_thread_state_get_fp(st);
                 for (int d = 0; d < 14 && fp && (fp & 7) == 0; d++) {
                     uint64_t fr[2];
                     if (!safe_read(fp, fr, sizeof(fr))) break;
@@ -360,13 +404,13 @@ static void *profiler(void *arg)
             char name[40] = "";
             if (pt) pthread_getname_np(pt, name, sizeof(name));
             if (th[i] == mach_thread_self() || !strstr(name, spec)) continue;
-            arm_thread_state64_t st; mach_msg_type_number_t cnt = ARM_THREAD_STATE64_COUNT;
+            host_thread_state_t st; mach_msg_type_number_t cnt = HOST_THREAD_STATE_COUNT;
             thread_suspend(th[i]);
-            if (thread_get_state(th[i], ARM_THREAD_STATE64, (thread_state_t)&st, &cnt) == KERN_SUCCESS) {
+            if (thread_get_state(th[i], HOST_THREAD_STATE_FLAVOR, (thread_state_t)&st, &cnt) == KERN_SUCCESS) {
                 uintptr_t addrs[40]; int na = 0;
-                addrs[na++] = arm_thread_state64_get_pc(st);
-                addrs[na++] = arm_thread_state64_get_lr(st);
-                uintptr_t fp = arm_thread_state64_get_fp(st);
+                addrs[na++] = host_thread_state_get_pc(st);
+                addrs[na++] = host_thread_state_get_lr(st);
+                uintptr_t fp = host_thread_state_get_fp(st);
                 for (int d = 0; d < 36 && fp && (fp & 7) == 0; d++) {
                     uint64_t fr[2];
                     if (!safe_read(fp, fr, sizeof(fr))) break;
